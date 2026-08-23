@@ -1,0 +1,645 @@
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { api, imgUrl, catLabel } from "@/lib/api";
+import { Reveal, RevealImage, EASE } from "@/components/Reveal";
+import ProjectCard from "@/components/ProjectCard";
+
+/* =========================================================
+   VIDEO EMBED URL
+   Supports:
+   - YouTube
+   - YouTube Live
+   - YouTube Shorts
+   - youtu.be
+   - Vimeo
+   - Google Drive
+========================================================= */
+
+function embedUrl(url) {
+  if (!url) return null;
+
+  const value = url.trim();
+
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname;
+    const pathname = parsed.pathname;
+
+    /* =========================
+       YOUTUBE
+    ========================= */
+
+    if (hostname.includes("youtube.com")) {
+
+      // ---------------------------------
+      // YouTube normal:
+      // https://www.youtube.com/watch?v=VIDEO_ID
+      // ---------------------------------
+
+      if (pathname === "/watch") {
+        const videoId = parsed.searchParams.get("v");
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+
+      // ---------------------------------
+      // YouTube Live:
+      // https://www.youtube.com/live/VIDEO_ID
+      // ---------------------------------
+
+      if (pathname.startsWith("/live/")) {
+        const videoId = pathname
+          .replace("/live/", "")
+          .split("/")[0];
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+
+      // ---------------------------------
+      // YouTube Shorts:
+      // https://www.youtube.com/shorts/VIDEO_ID
+      // ---------------------------------
+
+      if (pathname.startsWith("/shorts/")) {
+        const videoId = pathname
+          .replace("/shorts/", "")
+          .split("/")[0];
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+
+      // ---------------------------------
+      // YouTube embed:
+      // https://www.youtube.com/embed/VIDEO_ID
+      // ---------------------------------
+
+      if (pathname.startsWith("/embed/")) {
+        return value;
+      }
+    }
+
+    /* =========================
+       YOUTUBE SHORT URL
+    ========================= */
+
+    // https://youtu.be/VIDEO_ID
+
+    if (hostname === "youtu.be") {
+      const videoId = pathname
+        .replace("/", "")
+        .split("/")[0];
+
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+    }
+
+    /* =========================
+       VIMEO
+    ========================= */
+
+    // https://vimeo.com/123456789
+
+    if (hostname.includes("vimeo.com")) {
+      const parts = pathname
+        .split("/")
+        .filter(Boolean);
+
+      const videoId = parts[parts.length - 1];
+
+      if (videoId && /^\d+$/.test(videoId)) {
+        return `https://player.vimeo.com/video/${videoId}`;
+      }
+    }
+
+    /* =========================
+       GOOGLE DRIVE
+    ========================= */
+
+    // https://drive.google.com/file/d/FILE_ID/view
+
+    if (hostname.includes("drive.google.com")) {
+      const match = value.match(/\/file\/d\/([^/]+)/);
+
+      if (match?.[1]) {
+        return `https://drive.google.com/file/d/${match[1]}/preview`;
+      }
+    }
+
+  } catch (error) {
+    console.error("Invalid video URL:", error);
+    return null;
+  }
+
+  return null;
+}
+
+
+/* =========================================================
+   PROJECT DETAIL
+========================================================= */
+
+export default function ProjectDetail() {
+
+  const { slug } = useParams();
+
+  const [p, setP] = useState(undefined);
+
+  /*
+    undefined = loading
+    null      = project not found
+  */
+
+  /* =========================================================
+     LOAD PROJECT
+  ========================================================= */
+
+  useEffect(() => {
+
+    setP(undefined);
+
+    api
+      .get(`/projects/${slug}`)
+      .then((r) => {
+        setP(r.data);
+      })
+      .catch(() => {
+        setP(null);
+      });
+
+  }, [slug]);
+
+
+  /* =========================================================
+     PAGE TITLE
+  ========================================================= */
+
+  useEffect(() => {
+
+    if (p) {
+      document.title =
+        p.seo_title ||
+        `${p.title} — Jeghout Visualworks`;
+    }
+
+    return () => {
+      document.title = "Jeghout Visualworks";
+    };
+
+  }, [p]);
+
+
+  /* =========================================================
+     LOADING
+  ========================================================= */
+
+  if (p === undefined) {
+
+    return (
+      <main
+        className="pt-40 pb-24 max-w-[1440px] mx-auto px-6 md:px-12"
+        data-testid="project-loading"
+      >
+
+        <div className="h-4 w-40 bg-[#111116] animate-pulse mb-6" />
+
+        <div className="h-14 w-2/3 bg-[#111116] animate-pulse mb-14" />
+
+        <div className="w-full h-[60vh] bg-[#111116] animate-pulse" />
+
+      </main>
+    );
+  }
+
+
+  /* =========================================================
+     PROJECT NOT FOUND
+  ========================================================= */
+
+  if (p === null) {
+
+    return (
+      <main
+        className="pt-44 pb-32 text-center px-6"
+        data-testid="project-not-found"
+      >
+
+        <p className="font-display text-6xl md:text-8xl font-bold text-stroke">
+          404
+        </p>
+
+        <h1 className="font-display text-2xl md:text-3xl font-semibold mt-6">
+          Project not found
+        </h1>
+
+        <p className="text-[#9A9A9F] mt-3 text-sm">
+          It may have been unpublished or removed.
+        </p>
+
+        <Link
+          to="/work"
+          className="inline-flex items-center gap-2 mt-8 text-sm text-[#A970FF] hover:text-white transition-colors"
+        >
+          <ArrowLeft size={15} />
+          Back to all work
+        </Link>
+
+      </main>
+    );
+  }
+
+
+  /* =========================================================
+     VIDEO URL
+  ========================================================= */
+
+  const video = embedUrl(p.video_url);
+
+
+  /* =========================================================
+     MAIN
+  ========================================================= */
+
+  return (
+
+    <main
+      className="pb-24"
+      data-testid="project-detail"
+    >
+
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+
+      <div className="max-w-[1440px] mx-auto px-6 md:px-12 pt-36 md:pt-44">
+
+        <motion.div
+          initial={{
+            opacity: 0,
+            y: 16,
+          }}
+          animate={{
+            opacity: 1,
+            y: 0,
+          }}
+          transition={{
+            duration: 0.6,
+            ease: EASE,
+          }}
+        >
+
+          <Link
+            to="/work"
+            data-testid="back-to-work"
+            className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-[#9A9A9F] hover:text-white transition-colors mb-10"
+          >
+            <ArrowLeft size={14} />
+            All Work
+          </Link>
+
+        </motion.div>
+
+
+        {/* CATEGORY */}
+
+        <motion.p
+          initial={{
+            opacity: 0,
+            y: 20,
+          }}
+          animate={{
+            opacity: 1,
+            y: 0,
+          }}
+          transition={{
+            delay: 0.08,
+            duration: 0.6,
+            ease: EASE,
+          }}
+          className="text-xs md:text-sm tracking-[0.25em] uppercase font-semibold text-[#A970FF]"
+        >
+          {catLabel(p.category)} — {p.year}
+        </motion.p>
+
+
+        {/* TITLE */}
+
+        <motion.h1
+          initial={{
+            opacity: 0,
+            y: 20,
+          }}
+          animate={{
+            opacity: 1,
+            y: 0,
+          }}
+          transition={{
+            delay: 0.16,
+            duration: 0.7,
+            ease: EASE,
+          }}
+          className="font-display text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter mt-4 max-w-4xl leading-[1.05]"
+          data-testid="project-title"
+        >
+          {p.title}
+        </motion.h1>
+
+
+        {/* ===================================================
+            PROJECT META
+        =================================================== */}
+
+        <motion.div
+          initial={{
+            opacity: 0,
+            y: 20,
+          }}
+          animate={{
+            opacity: 1,
+            y: 0,
+          }}
+          transition={{
+            delay: 0.26,
+            duration: 0.7,
+            ease: EASE,
+          }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-12 pb-12 border-b border-white/10"
+          data-testid="project-meta"
+        >
+
+          {/* CLIENT */}
+
+          <div>
+
+            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+              Client
+            </p>
+
+            <p className="text-sm text-[#F5F5F5]">
+              {p.client || "—"}
+            </p>
+
+          </div>
+
+
+          {/* YEAR */}
+
+          <div>
+
+            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+              Year
+            </p>
+
+            <p className="text-sm text-[#F5F5F5]">
+              {p.year || "—"}
+            </p>
+
+          </div>
+
+
+          {/* ROLE */}
+
+          <div>
+
+            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+              My Role
+            </p>
+
+            <p className="text-sm text-[#F5F5F5]">
+              {p.role || "—"}
+            </p>
+
+          </div>
+
+
+          {/* TOOLS */}
+
+          <div>
+
+            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+              Tools
+            </p>
+
+            <div className="flex flex-wrap gap-1.5">
+
+              {(p.tools || []).map((t) => (
+
+                <span
+                  key={t}
+                  className="text-[11px] border border-white/10 rounded-full px-2.5 py-1 text-[#C8C8CC]"
+                >
+                  {t}
+                </span>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        </motion.div>
+
+      </div>
+
+
+      {/* =====================================================
+          HERO IMAGE
+      ===================================================== */}
+
+      <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-14">
+
+        <div
+          className="overflow-hidden"
+          data-testid="project-hero-image"
+        >
+
+          <motion.img
+            src={imgUrl(p.cover)}
+            alt={p.title}
+            className="w-full h-[50vh] md:h-[72vh] object-cover"
+            initial={{
+              opacity: 0,
+              scale: 1.03,
+            }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+            }}
+            transition={{
+              duration: 1,
+              ease: EASE,
+            }}
+          />
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          PROJECT OVERVIEW
+      ===================================================== */}
+
+      <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20 grid grid-cols-1 md:grid-cols-12 gap-10">
+
+        <Reveal className="md:col-span-4">
+
+          <p className="text-xs tracking-[0.25em] uppercase font-semibold text-[#A970FF]">
+            Project Overview
+          </p>
+
+        </Reveal>
+
+
+        <Reveal
+          delay={0.1}
+          className="md:col-span-8"
+        >
+
+          <p
+            className="text-lg md:text-xl text-[#C8C8CC] leading-relaxed max-w-3xl"
+            data-testid="project-description"
+          >
+            {p.description}
+          </p>
+
+        </Reveal>
+
+      </div>
+
+
+      {/* =====================================================
+          VIDEO
+      ===================================================== */}
+
+      {video && (
+
+        <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20">
+
+          <Reveal>
+
+            <div
+              className="aspect-video w-full bg-[#111116] border border-white/10 overflow-hidden"
+              data-testid="project-video"
+            >
+
+              <iframe
+                src={video}
+                title={`${p.title} video`}
+                className="w-full h-full"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allowFullScreen
+              />
+
+            </div>
+
+          </Reveal>
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
+          GALLERY
+      ===================================================== */}
+
+      {p.gallery?.length > 0 && (
+
+        <div
+          className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20 grid grid-cols-1 md:grid-cols-2 gap-6"
+          data-testid="project-gallery"
+        >
+
+          {p.gallery.map((g, i) => (
+
+            <RevealImage
+              key={i}
+              src={imgUrl(g)}
+              alt={`${p.title} — image ${i + 1}`}
+              className={
+                i % 3 === 0
+                  ? "md:col-span-2 aspect-[16/9]"
+                  : "aspect-[4/3]"
+              }
+            />
+
+          ))}
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
+          MORE PROJECTS
+      ===================================================== */}
+
+      {p.related?.length > 0 && (
+
+        <div
+          className="max-w-[1440px] mx-auto px-6 md:px-12 mt-28 md:mt-36"
+          data-testid="more-projects"
+        >
+
+          <div className="flex items-end justify-between mb-12">
+
+            <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tighter">
+              More Projects
+            </h2>
+
+            <Link
+              to="/work"
+              data-testid="view-all-link"
+              className="group hidden sm:inline-flex items-center gap-2 text-sm text-[#C8C8CC] hover:text-white transition-colors"
+            >
+              View All Projects
+
+              <ArrowRight
+                size={15}
+                className="text-[#A970FF] transition-transform duration-300 group-hover:translate-x-1.5"
+              />
+
+            </Link>
+
+          </div>
+
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {p.related
+              .slice(0, 3)
+              .map((r, i) => (
+
+                <Reveal
+                  key={r.id}
+                  delay={i * 0.1}
+                >
+
+                  <ProjectCard
+                    project={r}
+                    aspect="aspect-[4/3]"
+                  />
+
+                </Reveal>
+
+              ))}
+
+          </div>
+
+        </div>
+
+      )}
+
+    </main>
+  );
+}
