@@ -38,7 +38,13 @@ mongo_url = os.environ["MONGO_URL"]
 
 client = AsyncIOMotorClient(mongo_url)
 
-db = client[os.environ["DB_NAME"]]
+DB_NAME = os.environ.get("DB_NAME", "jeghout").strip()
+
+# MongoDB database names are case-sensitive on Atlas.
+# Always use lowercase for this project.
+DB_NAME = DB_NAME.lower()
+
+db = client[DB_NAME]
 
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = "HS256"

@@ -189,10 +189,19 @@ async def seed_all(db, root_dir: Path):
     existing = await db.admin_users.find_one({"email": admin_email})
     hashed = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
     if not existing:
-        await db.admin_users.insert_one({
-            "id": uuid.uuid4().hex, "email": admin_email, "name": "Admin",
-            "password_hash": hashed, "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+       existing_admin = await db.admin_users.find_one({
+    "email": admin_email
+})
+
+if not existing_admin:
+    await db.admin_users.insert_one({
+        "id": uuid.uuid4().hex,
+        "email": admin_email,
+        "name": "Admin",
+        "password_hash": hashed,
+        "role": "admin",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
         })
         logger.info(f"Seeded admin user: {admin_email}")
     elif not bcrypt.checkpw(admin_password.encode(), existing["password_hash"].encode()):
