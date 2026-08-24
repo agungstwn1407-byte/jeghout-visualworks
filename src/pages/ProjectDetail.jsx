@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight } from "lucide-react";
+
 import { api, imgUrl, catLabel } from "@/lib/api";
 import { Reveal, RevealImage, EASE } from "@/components/Reveal";
 import ProjectCard from "@/components/ProjectCard";
 
 /* =========================================================
    VIDEO EMBED URL
+
    Supports:
    - YouTube
    - YouTube Live
@@ -20,20 +22,24 @@ import ProjectCard from "@/components/ProjectCard";
 function embedUrl(url) {
   if (!url) return null;
 
-  const value = url.trim();
+  const value = String(url).trim();
 
   try {
     const parsed = new URL(value);
+
     const hostname = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname;
 
-    /* =========================
+    /* =====================================================
        YOUTUBE
-    ========================= */
+    ===================================================== */
 
-    if (hostname.includes("youtube.com")) {
-      // YouTube normal:
-      // https://www.youtube.com/watch?v=VIDEO_ID
+    if (
+      hostname === "youtube.com" ||
+      hostname === "www.youtube.com" ||
+      hostname === "m.youtube.com"
+    ) {
+      /* Normal YouTube */
 
       if (pathname === "/watch") {
         const videoId = parsed.searchParams.get("v");
@@ -43,8 +49,7 @@ function embedUrl(url) {
         }
       }
 
-      // YouTube Live:
-      // https://www.youtube.com/live/VIDEO_ID
+      /* YouTube Live */
 
       if (pathname.startsWith("/live/")) {
         const videoId = pathname
@@ -56,8 +61,7 @@ function embedUrl(url) {
         }
       }
 
-      // YouTube Shorts:
-      // https://www.youtube.com/shorts/VIDEO_ID
+      /* YouTube Shorts */
 
       if (pathname.startsWith("/shorts/")) {
         const videoId = pathname
@@ -69,19 +73,18 @@ function embedUrl(url) {
         }
       }
 
-      // YouTube embed:
-      // https://www.youtube.com/embed/VIDEO_ID
+      /* YouTube Embed */
 
       if (pathname.startsWith("/embed/")) {
         return value;
       }
     }
 
-    /* =========================
+    /* =====================================================
        YOUTUBE SHORT URL
-    ========================= */
 
-    // https://youtu.be/VIDEO_ID
+       https://youtu.be/VIDEO_ID
+    ===================================================== */
 
     if (hostname === "youtu.be") {
       const videoId = pathname
@@ -93,40 +96,50 @@ function embedUrl(url) {
       }
     }
 
-    /* =========================
+    /* =====================================================
        VIMEO
-    ========================= */
 
-    // https://vimeo.com/123456789
+       https://vimeo.com/123456789
+    ===================================================== */
 
-    if (hostname.includes("vimeo.com")) {
+    if (
+      hostname === "vimeo.com" ||
+      hostname.endsWith(".vimeo.com")
+    ) {
       const parts = pathname
         .split("/")
         .filter(Boolean);
 
       const videoId = parts[parts.length - 1];
 
-      if (videoId && /^\d+$/.test(videoId)) {
+      if (
+        videoId &&
+        /^\d+$/.test(videoId)
+      ) {
         return `https://player.vimeo.com/video/${videoId}`;
       }
     }
 
-    /* =========================
+    /* =====================================================
        GOOGLE DRIVE
-    ========================= */
 
-    // https://drive.google.com/file/d/FILE_ID/view
+       https://drive.google.com/file/d/FILE_ID/view
+    ===================================================== */
 
-    if (hostname.includes("drive.google.com")) {
-      const match = value.match(/\/file\/d\/([^/]+)/);
+    if (hostname === "drive.google.com") {
+      const match = value.match(
+        /\/file\/d\/([^/]+)/
+      );
 
       if (match?.[1]) {
         return `https://drive.google.com/file/d/${match[1]}/preview`;
       }
     }
   } catch (error) {
-    console.error("Invalid video URL:", error);
-    return null;
+    console.error(
+      "Invalid video URL:",
+      error
+    );
   }
 
   return null;
@@ -139,33 +152,39 @@ function embedUrl(url) {
 export default function ProjectDetail() {
   const { slug } = useParams();
 
+  /*
+   * undefined = loading
+   * null = project not found
+   * object = project ditemukan
+   */
+
   const [p, setP] = useState(undefined);
 
-  /*
-    undefined = loading
-    null = project not found
-  */
-
-  /* =========================================================
+  /* =======================================================
      LOAD PROJECT
-  ========================================================= */
+  ======================================================= */
 
   useEffect(() => {
     setP(undefined);
 
     api
       .get(`/projects/${slug}`)
-      .then((r) => {
-        setP(r.data);
+      .then((response) => {
+        setP(response.data);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error(
+          "Failed to load project:",
+          error
+        );
+
         setP(null);
       });
   }, [slug]);
 
-  /* =========================================================
+  /* =======================================================
      PAGE TITLE
-  ========================================================= */
+  ======================================================= */
 
   useEffect(() => {
     if (p) {
@@ -175,54 +194,122 @@ export default function ProjectDetail() {
     }
 
     return () => {
-      document.title = "Jeghout Visualworks";
+      document.title =
+        "Jeghout Visualworks";
     };
   }, [p]);
 
-  /* =========================================================
+  /* =======================================================
      LOADING
-  ========================================================= */
+  ======================================================= */
 
   if (p === undefined) {
     return (
       <main
-        className="pt-40 pb-24 max-w-[1440px] mx-auto px-6 md:px-12"
+        className="
+          pt-40
+          pb-24
+          max-w-[1440px]
+          mx-auto
+          px-6
+          md:px-12
+        "
         data-testid="project-loading"
       >
-        <div className="h-4 w-40 bg-[#111116] animate-pulse mb-6" />
+        <div
+          className="
+            h-4
+            w-40
+            bg-[#111116]
+            animate-pulse
+            mb-6
+          "
+        />
 
-        <div className="h-14 w-2/3 bg-[#111116] animate-pulse mb-14" />
+        <div
+          className="
+            h-14
+            w-2/3
+            bg-[#111116]
+            animate-pulse
+            mb-14
+          "
+        />
 
-        <div className="w-full h-[60vh] bg-[#111116] animate-pulse" />
+        <div
+          className="
+            w-full
+            h-[50vh]
+            bg-[#111116]
+            animate-pulse
+          "
+        />
       </main>
     );
   }
 
-  /* =========================================================
+  /* =======================================================
      PROJECT NOT FOUND
-  ========================================================= */
+  ======================================================= */
 
   if (p === null) {
     return (
       <main
-        className="pt-44 pb-32 text-center px-6"
+        className="
+          pt-44
+          pb-32
+          text-center
+          px-6
+        "
         data-testid="project-not-found"
       >
-        <p className="font-display text-6xl md:text-8xl font-bold text-stroke">
+        <p
+          className="
+            font-display
+            text-6xl
+            md:text-8xl
+            font-bold
+            text-stroke
+          "
+        >
           404
         </p>
 
-        <h1 className="font-display text-2xl md:text-3xl font-semibold mt-6">
+        <h1
+          className="
+            font-display
+            text-2xl
+            md:text-3xl
+            font-semibold
+            mt-6
+          "
+        >
           Project not found
         </h1>
 
-        <p className="text-[#9A9A9F] mt-3 text-sm">
-          It may have been unpublished or removed.
+        <p
+          className="
+            text-[#9A9A9F]
+            mt-3
+            text-sm
+          "
+        >
+          It may have been unpublished
+          or removed.
         </p>
 
         <Link
           to="/work"
-          className="inline-flex items-center gap-2 mt-8 text-sm text-[#A970FF] hover:text-white transition-colors"
+          className="
+            inline-flex
+            items-center
+            gap-2
+            mt-8
+            text-sm
+            text-[#A970FF]
+            hover:text-white
+            transition-colors
+          "
         >
           <ArrowLeft size={15} />
           Back to all work
@@ -231,26 +318,39 @@ export default function ProjectDetail() {
     );
   }
 
-  /* =========================================================
-     VIDEO URL
-  ========================================================= */
+  /* =======================================================
+     VIDEO
+  ======================================================= */
 
   const video = embedUrl(p.video_url);
 
-  /* =========================================================
+  /* =======================================================
      MAIN
-  ========================================================= */
+  ======================================================= */
 
   return (
     <main
       className="pb-24"
       data-testid="project-detail"
     >
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
 
-      <div className="max-w-[1440px] mx-auto px-6 md:px-12 pt-36 md:pt-44">
+      {/* ===================================================
+          HEADER
+      =================================================== */}
+
+      <div
+        className="
+          max-w-[1440px]
+          mx-auto
+          px-6
+          md:px-12
+          pt-36
+          md:pt-44
+        "
+      >
+
+        {/* BACK */}
+
         <motion.div
           initial={{
             opacity: 0,
@@ -268,7 +368,18 @@ export default function ProjectDetail() {
           <Link
             to="/work"
             data-testid="back-to-work"
-            className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase text-[#9A9A9F] hover:text-white transition-colors mb-10"
+            className="
+              inline-flex
+              items-center
+              gap-2
+              text-xs
+              tracking-[0.2em]
+              uppercase
+              text-[#9A9A9F]
+              hover:text-white
+              transition-colors
+              mb-10
+            "
           >
             <ArrowLeft size={14} />
             All Work
@@ -291,7 +402,14 @@ export default function ProjectDetail() {
             duration: 0.6,
             ease: EASE,
           }}
-          className="text-xs md:text-sm tracking-[0.25em] uppercase font-semibold text-[#A970FF]"
+          className="
+            text-xs
+            md:text-sm
+            tracking-[0.25em]
+            uppercase
+            font-semibold
+            text-[#A970FF]
+          "
         >
           {catLabel(p.category)} — {p.year}
         </motion.p>
@@ -312,15 +430,25 @@ export default function ProjectDetail() {
             duration: 0.7,
             ease: EASE,
           }}
-          className="font-display text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter mt-4 max-w-4xl leading-[1.05]"
+          className="
+            font-display
+            text-4xl
+            md:text-6xl
+            lg:text-7xl
+            font-bold
+            tracking-tighter
+            mt-4
+            max-w-4xl
+            leading-[1.05]
+          "
           data-testid="project-title"
         >
           {p.title}
         </motion.h1>
 
-        {/* ===================================================
+        {/* =================================================
             PROJECT META
-        =================================================== */}
+        ================================================= */}
 
         <motion.div
           initial={{
@@ -336,17 +464,40 @@ export default function ProjectDetail() {
             duration: 0.7,
             ease: EASE,
           }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-12 pb-12 border-b border-white/10"
+          className="
+            grid
+            grid-cols-2
+            md:grid-cols-4
+            gap-8
+            mt-12
+            pb-12
+            border-b
+            border-white/10
+          "
           data-testid="project-meta"
         >
+
           {/* CLIENT */}
 
           <div>
-            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+            <p
+              className="
+                text-[10px]
+                tracking-[0.25em]
+                uppercase
+                text-[#9A9A9F]
+                mb-2
+              "
+            >
               Client
             </p>
 
-            <p className="text-sm text-[#F5F5F5]">
+            <p
+              className="
+                text-sm
+                text-[#F5F5F5]
+              "
+            >
               {p.client || "—"}
             </p>
           </div>
@@ -354,11 +505,24 @@ export default function ProjectDetail() {
           {/* YEAR */}
 
           <div>
-            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+            <p
+              className="
+                text-[10px]
+                tracking-[0.25em]
+                uppercase
+                text-[#9A9A9F]
+                mb-2
+              "
+            >
               Year
             </p>
 
-            <p className="text-sm text-[#F5F5F5]">
+            <p
+              className="
+                text-sm
+                text-[#F5F5F5]
+              "
+            >
               {p.year || "—"}
             </p>
           </div>
@@ -366,11 +530,24 @@ export default function ProjectDetail() {
           {/* ROLE */}
 
           <div>
-            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+            <p
+              className="
+                text-[10px]
+                tracking-[0.25em]
+                uppercase
+                text-[#9A9A9F]
+                mb-2
+              "
+            >
               My Role
             </p>
 
-            <p className="text-sm text-[#F5F5F5]">
+            <p
+              className="
+                text-sm
+                text-[#F5F5F5]
+              "
+            >
               {p.role || "—"}
             </p>
           </div>
@@ -378,60 +555,125 @@ export default function ProjectDetail() {
           {/* TOOLS */}
 
           <div>
-            <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
+            <p
+              className="
+                text-[10px]
+                tracking-[0.25em]
+                uppercase
+                text-[#9A9A9F]
+                mb-2
+              "
+            >
               Tools
             </p>
 
-            <div className="flex flex-wrap gap-1.5">
-              {(p.tools || []).map((t) => (
-                <span
-                  key={t}
-                  className="text-[11px] border border-white/10 rounded-full px-2.5 py-1 text-[#C8C8CC]"
-                >
-                  {t}
-                </span>
-              ))}
+            <div
+              className="
+                flex
+                flex-wrap
+                gap-1.5
+              "
+            >
+              {(p.tools || []).map(
+                (tool) => (
+                  <span
+                    key={tool}
+                    className="
+                      text-[11px]
+                      border
+                      border-white/10
+                      rounded-full
+                      px-2.5
+                      py-1
+                      text-[#C8C8CC]
+                    "
+                  >
+                    {tool}
+                  </span>
+                )
+              )}
             </div>
           </div>
+
         </motion.div>
       </div>
 
-      {/* =====================================================
-          HERO IMAGE
-      ===================================================== */}
+      {/* ===================================================
+          HERO / COVER
 
-      <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-14">
+          Mengikuti rasio asli file upload.
+          Tidak menggunakan object-cover.
+      =================================================== */}
+
+      <div
+        className="
+          max-w-[1440px]
+          mx-auto
+          px-6
+          md:px-12
+          mt-14
+        "
+      >
         <div
-          className="overflow-hidden"
+          className="
+            overflow-hidden
+            bg-[#111116]
+          "
           data-testid="project-hero-image"
         >
           <motion.img
             src={imgUrl(p.cover)}
             alt={p.title}
-            className="w-full h-[50vh] md:h-[72vh] object-cover"
+            className="
+              block
+              w-full
+              h-auto
+              object-contain
+            "
             initial={{
               opacity: 0,
-              scale: 1.03,
+              scale: 1.02,
             }}
             animate={{
               opacity: 1,
               scale: 1,
             }}
             transition={{
-              duration: 1,
+              duration: 0.8,
               ease: EASE,
             }}
           />
         </div>
       </div>
 
-      {/* =====================================================
+      {/* ===================================================
           PROJECT OVERVIEW
-      ===================================================== */}
+      =================================================== */}
 
-      <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20 grid grid-cols-1 md:grid-cols-12 gap-10">
+      <div
+        className="
+          max-w-[1440px]
+          mx-auto
+          px-6
+          md:px-12
+          mt-20
+          grid
+          grid-cols-1
+          md:grid-cols-12
+          gap-10
+        "
+      >
+
         <Reveal className="md:col-span-4">
-          <p className="text-xs tracking-[0.25em] uppercase font-semibold text-[#A970FF]">
+          <p
+            className="
+              text-xs
+              tracking-[0.25em]
+              uppercase
+              font-semibold
+              text-[#A970FF]
+            "
+          >
             Project Overview
           </p>
         </Reveal>
@@ -441,31 +683,71 @@ export default function ProjectDetail() {
           className="md:col-span-8"
         >
           <p
-            className="text-lg md:text-xl text-[#C8C8CC] leading-relaxed max-w-3xl"
+            className="
+              text-lg
+              md:text-xl
+              text-[#C8C8CC]
+              leading-relaxed
+              max-w-3xl
+            "
             data-testid="project-description"
           >
             {p.description}
           </p>
         </Reveal>
+
       </div>
 
-      {/* =====================================================
+      {/* ===================================================
           VIDEO
-      ===================================================== */}
+
+          Tetap 16:9 agar video YouTube/Vimeo/Drive
+          tidak terpotong.
+      =================================================== */}
 
       {video && (
-        <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20">
+        <div
+          className="
+            max-w-[1440px]
+            mx-auto
+            px-6
+            md:px-12
+            mt-20
+          "
+        >
           <Reveal>
             <div
-              className="relative w-full aspect-[16/9] bg-[#111116] border border-white/10 overflow-hidden"
+              className="
+                relative
+                w-full
+                aspect-video
+                bg-[#111116]
+                border
+                border-white/10
+                overflow-hidden
+              "
               data-testid="project-video"
             >
               <iframe
                 src={video}
                 title={`${p.title} video`}
-                className="absolute inset-0 w-full h-full border-0"
+                className="
+                  absolute
+                  inset-0
+                  w-full
+                  h-full
+                  border-0
+                "
                 loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allow="
+                  accelerometer;
+                  autoplay;
+                  clipboard-write;
+                  encrypted-media;
+                  gyroscope;
+                  picture-in-picture;
+                  fullscreen
+                "
                 allowFullScreen
               />
             </div>
@@ -473,75 +755,158 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* =====================================================
+      {/* ===================================================
           GALLERY
-      ===================================================== */}
+
+          MOBILE = 2 KOLOM
+          DESKTOP = 2 KOLOM
+
+          Semua gambar:
+          - mengikuti rasio upload
+          - tidak dipotong
+          - tidak dipaksa aspect ratio
+          - tersusun masonry
+      =================================================== */}
 
       {p.gallery?.length > 0 && (
         <div
-          className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20 grid grid-cols-1 md:grid-cols-2 gap-6"
+          className="
+            max-w-[1440px]
+            mx-auto
+            px-6
+            md:px-12
+            mt-20
+          "
           data-testid="project-gallery"
         >
-          {p.gallery.map((g, i) => (
-            <RevealImage
-              key={i}
-              src={imgUrl(g)}
-              alt={`${p.title} — image ${i + 1}`}
-              className={
-                i % 3 === 0
-                  ? "md:col-span-2 aspect-[16/9]"
-                  : "aspect-[4/3]"
-              }
-            />
-          ))}
+          <div
+            className="
+              columns-2
+              gap-3
+              md:gap-6
+            "
+          >
+            {p.gallery.map(
+              (image, index) => (
+                <div
+                  key={index}
+                  className="
+                    break-inside-avoid
+                    mb-3
+                    md:mb-6
+                  "
+                >
+                  <RevealImage
+                    src={imgUrl(image)}
+                    alt={`${p.title} — image ${index + 1}`}
+                    className="
+                      block
+                      w-full
+                      h-auto
+                      object-contain
+                    "
+                  />
+                </div>
+              )
+            )}
+          </div>
         </div>
       )}
 
-      {/* =====================================================
+      {/* ===================================================
           MORE PROJECTS
-      ===================================================== */}
+      =================================================== */}
 
       {p.related?.length > 0 && (
         <div
-          className="max-w-[1440px] mx-auto px-6 md:px-12 mt-28 md:mt-36"
+          className="
+            max-w-[1440px]
+            mx-auto
+            px-6
+            md:px-12
+            mt-28
+            md:mt-36
+          "
           data-testid="more-projects"
         >
-          <div className="flex items-end justify-between mb-12">
-            <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tighter">
+
+          <div
+            className="
+              flex
+              items-end
+              justify-between
+              mb-12
+            "
+          >
+            <h2
+              className="
+                font-display
+                text-3xl
+                md:text-5xl
+                font-bold
+                tracking-tighter
+              "
+            >
               More Projects
             </h2>
 
             <Link
               to="/work"
               data-testid="view-all-link"
-              className="group hidden sm:inline-flex items-center gap-2 text-sm text-[#C8C8CC] hover:text-white transition-colors"
+              className="
+                group
+                hidden
+                sm:inline-flex
+                items-center
+                gap-2
+                text-sm
+                text-[#C8C8CC]
+                hover:text-white
+                transition-colors
+              "
             >
               View All Projects
 
               <ArrowRight
                 size={15}
-                className="text-[#A970FF] transition-transform duration-300 group-hover:translate-x-1.5"
+                className="
+                  text-[#A970FF]
+                  transition-transform
+                  duration-300
+                  group-hover:translate-x-1.5
+                "
               />
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div
+            className="
+              grid
+              grid-cols-1
+              md:grid-cols-3
+              gap-6
+            "
+          >
             {p.related
               .slice(0, 3)
-              .map((r, i) => (
-                <Reveal
-                  key={r.id}
-                  delay={i * 0.1}
-                >
-                  <ProjectCard
-                    project={r}
-                    aspect="aspect-[4/3]"
-                  />
-                </Reveal>
-              ))}
+              .map(
+                (related, index) => (
+                  <Reveal
+                    key={related.id}
+                    delay={index * 0.1}
+                  >
+                    <ProjectCard
+                      project={related}
+                      aspect="aspect-[4/3]"
+                    />
+                  </Reveal>
+                )
+              )}
           </div>
+
         </div>
       )}
+
     </main>
   );
 }
