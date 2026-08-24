@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, Play } from "lucide-react";
 import { imgUrl, catLabel } from "@/lib/api";
@@ -17,7 +17,7 @@ function getYouTubeVideoId(url) {
     const pathname = parsed.pathname;
 
     /* =====================================================
-       youtube.com/watch?v=VIDEO_ID
+       YOUTUBE.COM
     ===================================================== */
 
     if (
@@ -25,8 +25,15 @@ function getYouTubeVideoId(url) {
       hostname === "www.youtube.com" ||
       hostname === "m.youtube.com"
     ) {
+      /* ===================================================
+         youtube.com/watch?v=VIDEO_ID
+      =================================================== */
+
       if (pathname === "/watch") {
-        return parsed.searchParams.get("v");
+        const videoId =
+          parsed.searchParams.get("v");
+
+        return videoId || null;
       }
 
       /* ===================================================
@@ -34,9 +41,11 @@ function getYouTubeVideoId(url) {
       =================================================== */
 
       if (pathname.startsWith("/live/")) {
-        return pathname
+        const videoId = pathname
           .replace("/live/", "")
           .split("/")[0];
+
+        return videoId || null;
       }
 
       /* ===================================================
@@ -44,9 +53,11 @@ function getYouTubeVideoId(url) {
       =================================================== */
 
       if (pathname.startsWith("/shorts/")) {
-        return pathname
+        const videoId = pathname
           .replace("/shorts/", "")
           .split("/")[0];
+
+        return videoId || null;
       }
 
       /* ===================================================
@@ -54,20 +65,24 @@ function getYouTubeVideoId(url) {
       =================================================== */
 
       if (pathname.startsWith("/embed/")) {
-        return pathname
+        const videoId = pathname
           .replace("/embed/", "")
           .split("/")[0];
+
+        return videoId || null;
       }
     }
 
     /* =====================================================
-       youtu.be/VIDEO_ID
+       YOUTU.BE/VIDEO_ID
     ===================================================== */
 
     if (hostname === "youtu.be") {
-      return pathname
+      const videoId = pathname
         .replace("/", "")
         .split("/")[0];
+
+      return videoId || null;
     }
 
   } catch (error) {
@@ -80,19 +95,28 @@ function getYouTubeVideoId(url) {
   return null;
 }
 
+
 /* =========================================================
-   GET YOUTUBE THUMBNAIL
+   GET YOUTUBE THUMBNAILS
 ========================================================= */
 
-function getYouTubeThumbnail(url) {
-  const videoId = getYouTubeVideoId(url);
+function getYouTubeThumbnails(url) {
+  const videoId =
+    getYouTubeVideoId(url);
 
   if (!videoId) {
     return null;
   }
 
-  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  return {
+    primary:
+      `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+
+    fallback:
+      `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+  };
 }
+
 
 /* =========================================================
    PROJECT CARD
@@ -101,38 +125,97 @@ function getYouTubeThumbnail(url) {
 export default function ProjectCard({
   project,
 }) {
+
   /* =======================================================
-     COVER
+     COVER IMAGE
   ======================================================= */
 
-  const coverImage = imgUrl(project.cover);
+  const coverImage =
+    imgUrl(project.cover);
+
 
   /* =======================================================
      YOUTUBE
   ======================================================= */
 
-  const youtubeThumbnail =
-    getYouTubeThumbnail(
+  const youtubeThumbnails =
+    getYouTubeThumbnails(
       project.video_url
     );
 
-  /*
-   * Jika ada YouTube:
-   * gunakan thumbnail YouTube.
-   *
-   * Jika tidak:
-   * gunakan cover yang di-upload.
-   */
 
-  const previewImage =
-    youtubeThumbnail || coverImage;
+  /* =======================================================
+     PREVIEW IMAGE
+  ======================================================= */
+
+  const [previewImage, setPreviewImage] =
+    useState(
+      youtubeThumbnails?.primary ||
+      coverImage
+    );
+
+
+  /* =======================================================
+     IMAGE ERROR FALLBACK
+  ======================================================= */
+
+  const handleImageError = () => {
+
+    /* =====================================================
+       YOUTUBE HQ FAILED
+       Try MQ
+    ===================================================== */
+
+    if (
+      youtubeThumbnails?.fallback &&
+      previewImage ===
+        youtubeThumbnails.primary
+    ) {
+
+      setPreviewImage(
+        youtubeThumbnails.fallback
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       YOUTUBE FAILED
+       Use uploaded cover
+    ===================================================== */
+
+    if (
+      coverImage &&
+      previewImage !== coverImage
+    ) {
+
+      setPreviewImage(
+        coverImage
+      );
+
+    }
+
+  };
+
+
+  /* =======================================================
+     RETURN
+  ======================================================= */
 
   return (
+
     <Link
       to={`/work/${project.slug}`}
       data-cursor="view"
       data-testid={`project-card-${project.slug}`}
-      className="group block relative overflow-hidden bg-[#111116]"
+      className="
+        group
+        block
+        relative
+        overflow-hidden
+        bg-[#111116]
+      "
       aria-label={`View project ${project.title}`}
     >
 
@@ -140,10 +223,20 @@ export default function ProjectCard({
           PREVIEW IMAGE
       =================================================== */}
 
-      <div className="relative w-full overflow-hidden bg-[#111116]">
+      <div
+        className="
+          relative
+          w-full
+          overflow-hidden
+          bg-[#111116]
+        "
+      >
 
         <img
-          src={previewImage}
+          src={
+            previewImage ||
+            coverImage
+          }
           alt={project.title}
           loading="lazy"
           className="
@@ -156,29 +249,18 @@ export default function ProjectCard({
             ease-[cubic-bezier(0.22,1,0.36,1)]
             group-hover:scale-[1.03]
           "
-          onError={(event) => {
-
-            /*
-             * Jika thumbnail YouTube gagal,
-             * gunakan cover upload.
-             */
-
-            if (
-              youtubeThumbnail &&
-              event.currentTarget.src !== coverImage
-            ) {
-              event.currentTarget.src =
-                coverImage;
-            }
-
-          }}
+          onError={
+            handleImageError
+          }
         />
+
 
         {/* =================================================
             YOUTUBE PLAY BUTTON
         ================================================= */}
 
-        {youtubeThumbnail && (
+        {youtubeThumbnails && (
+
           <div
             className="
               absolute
@@ -189,6 +271,7 @@ export default function ProjectCard({
               pointer-events-none
             "
           >
+
             <div
               className="
                 w-12
@@ -209,6 +292,7 @@ export default function ProjectCard({
                 group-hover:bg-[#6C19D9]/90
               "
             >
+
               <Play
                 size={18}
                 className="
@@ -217,9 +301,13 @@ export default function ProjectCard({
                   fill-white
                 "
               />
+
             </div>
+
           </div>
+
         )}
+
 
         {/* =================================================
             HOVER GRADIENT
@@ -239,6 +327,7 @@ export default function ProjectCard({
             duration-500
           "
         />
+
 
         {/* =================================================
             PROJECT INFORMATION
@@ -261,7 +350,9 @@ export default function ProjectCard({
           "
         >
 
-          {/* Category */}
+          {/* =================================================
+              CATEGORY
+          ================================================= */}
 
           <p
             className="
@@ -273,11 +364,19 @@ export default function ProjectCard({
               mb-2
             "
           >
-            {catLabel(project.category)} —{" "}
+
+            {catLabel(project.category)}
+
+            {" — "}
+
             {project.year}
+
           </p>
 
-          {/* Title + Arrow */}
+
+          {/* =================================================
+              TITLE + ARROW
+          ================================================= */}
 
           <div
             className="
@@ -301,6 +400,7 @@ export default function ProjectCard({
               {project.title}
             </h3>
 
+
             <ArrowUpRight
               size={20}
               className="
@@ -313,6 +413,7 @@ export default function ProjectCard({
           </div>
 
         </div>
+
 
         {/* =================================================
             TOP PURPLE LINE
@@ -337,6 +438,8 @@ export default function ProjectCard({
         />
 
       </div>
+
     </Link>
+
   );
 }

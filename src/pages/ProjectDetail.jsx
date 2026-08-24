@@ -325,6 +325,33 @@ export default function ProjectDetail() {
   const video = embedUrl(p.video_url);
 
   /* =======================================================
+     VIDEO ASPECT RATIO
+
+     Backend dapat mengirim:
+       video_width
+       video_height
+       video_aspect_ratio
+
+     Fallback 16:9 untuk YouTube/Vimeo/Drive jika
+     metadata belum tersedia.
+  ======================================================= */
+
+  const videoWidth = Number(p.video_width);
+  const videoHeight = Number(p.video_height);
+
+  const parsedAspectRatio =
+    p.video_aspect_ratio ||
+    (
+      videoWidth > 0 &&
+      videoHeight > 0
+        ? `${videoWidth} / ${videoHeight}`
+        : null
+    );
+
+  const videoAspectRatio =
+    parsedAspectRatio || "16 / 9";
+
+  /* =======================================================
      MAIN
   ======================================================= */
 
@@ -701,8 +728,11 @@ export default function ProjectDetail() {
       {/* ===================================================
           VIDEO
 
-          Tetap 16:9 agar video YouTube/Vimeo/Drive
-          tidak terpotong.
+          Rasio mengikuti metadata video dari backend.
+          Jika metadata belum tersedia, fallback ke 16:9.
+
+          Tidak menggunakan aspect-video secara paksa,
+          sehingga Google Drive tidak terpotong pada mobile.
       =================================================== */}
 
       {video && (
@@ -720,12 +750,14 @@ export default function ProjectDetail() {
               className="
                 relative
                 w-full
-                aspect-video
                 bg-[#111116]
                 border
                 border-white/10
                 overflow-hidden
               "
+              style={{
+                aspectRatio: videoAspectRatio,
+              }}
               data-testid="project-video"
             >
               <iframe
