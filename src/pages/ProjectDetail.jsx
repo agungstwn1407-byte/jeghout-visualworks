@@ -114,7 +114,7 @@ function embedUrl(url) {
 
     /* =====================================================
        GOOGLE DRIVE
-       https://drive.google.com/file/d/FILE_ID/view
+       https://drive.google.com/file/d/FILE_ID/preview
     ===================================================== */
 
     if (hostname === "drive.google.com") {
