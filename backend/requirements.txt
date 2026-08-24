@@ -9,3 +9,4 @@ PyJWT
 Pillow
 python-multipart
 vercel-blob
+requests

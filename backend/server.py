@@ -1,12 +1,7 @@
 from dotenv import load_dotenv
 from pathlib import Path
 
-# =========================================================
-# PATH & ENVIRONMENT
-# =========================================================
-
 ROOT_DIR = Path(__file__).resolve().parent
-
 load_dotenv(ROOT_DIR / ".env")
 
 import os
@@ -14,12 +9,19 @@ import re
 import io
 import uuid
 import logging
+import smtplib
+import ssl
+import requests
+
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr
+
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 import bcrypt
 import jwt
-import requests
 
 from PIL import Image
 
@@ -52,63 +54,96 @@ from pydantic import BaseModel
 
 logging.basicConfig(
     level=logging.INFO,
-    format=(
-        "%(asctime)s - "
-        "%(name)s - "
-        "%(levelname)s - "
-        "%(message)s"
-    ),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 logger = logging.getLogger(__name__)
 
 
 # =========================================================
-# ENVIRONMENT VARIABLES
+# ENVIRONMENT
 # =========================================================
 
-MONGO_URL = os.environ.get(
-    "MONGO_URL",
-    ""
-).strip()
+MONGO_URL = os.environ.get("MONGO_URL", "").strip()
 
 JWT_SECRET = os.environ.get(
     "JWT_SECRET",
-    "change-this-secret-in-production"
+    "change-this-secret-in-production",
 ).strip()
 
 JWT_ALGORITHM = "HS256"
 
 DB_NAME = os.environ.get(
     "DB_NAME",
-    "jeghout"
+    "jeghout",
 ).strip().lower()
 
 BLOB_READ_WRITE_TOKEN = os.environ.get(
     "BLOB_READ_WRITE_TOKEN",
-    ""
+    "",
 ).strip()
 
 CORS_ORIGINS_RAW = os.environ.get(
     "CORS_ORIGINS",
-    "*"
+    "*",
 ).strip()
 
 
-if not MONGO_URL:
-    logger.warning(
-        "MONGO_URL belum tersedia."
+# =========================================================
+# GMAIL SMTP
+# =========================================================
+
+SMTP_HOST = os.environ.get(
+    "SMTP_HOST",
+    "smtp.gmail.com",
+).strip()
+
+try:
+    SMTP_PORT = int(
+        os.environ.get(
+            "SMTP_PORT",
+            "587",
+        ).strip()
     )
+except ValueError:
+    SMTP_PORT = 587
+
+SMTP_USERNAME = os.environ.get(
+    "SMTP_USERNAME",
+    "",
+).strip()
+
+SMTP_PASSWORD = os.environ.get(
+    "SMTP_PASSWORD",
+    "",
+).strip()
+
+NOTIFICATION_EMAIL = os.environ.get(
+    "NOTIFICATION_EMAIL",
+    SMTP_USERNAME,
+).strip()
+
+
+# =========================================================
+# WARNINGS
+# =========================================================
+
+if not MONGO_URL:
+    logger.warning("MONGO_URL belum tersedia.")
 
 if JWT_SECRET == "change-this-secret-in-production":
-    logger.warning(
-        "JWT_SECRET masih menggunakan default."
-    )
+    logger.warning("JWT_SECRET masih menggunakan default.")
 
 if not BLOB_READ_WRITE_TOKEN:
     logger.warning(
         "BLOB_READ_WRITE_TOKEN belum tersedia. "
         "Upload Vercel Blob tidak akan bekerja."
+    )
+
+if not SMTP_USERNAME or not SMTP_PASSWORD:
+    logger.warning(
+        "SMTP_USERNAME / SMTP_PASSWORD belum tersedia. "
+        "Email Gmail SMTP tidak akan dikirim."
     )
 
 
@@ -131,14 +166,14 @@ if MONGO_URL:
 
 
 # =========================================================
-# LOCAL TEMP UPLOAD DIRECTORY
+# LOCAL UPLOAD DIRECTORY
 # =========================================================
 
 UPLOAD_DIR = Path("/tmp/uploads")
 
 UPLOAD_DIR.mkdir(
     parents=True,
-    exist_ok=True
+    exist_ok=True,
 )
 
 
@@ -152,11 +187,11 @@ app = FastAPI(
 )
 
 api = APIRouter(
-    prefix="/api"
+    prefix="/api",
 )
 
 security = HTTPBearer(
-    auto_error=False
+    auto_error=False,
 )
 
 
@@ -165,15 +200,13 @@ security = HTTPBearer(
 # =========================================================
 
 def require_db():
-
     if db is None:
-
         raise HTTPException(
             status_code=503,
             detail=(
                 "Database belum terhubung. "
                 "Pastikan MONGO_URL sudah tersedia."
-            )
+            ),
         )
 
     return db
@@ -184,29 +217,24 @@ def require_db():
 # =========================================================
 
 def hash_password(
-    password: str
+    password: str,
 ) -> str:
-
     return bcrypt.hashpw(
         password.encode("utf-8"),
-        bcrypt.gensalt()
+        bcrypt.gensalt(),
     ).decode("utf-8")
 
 
 def verify_password(
     plain: str,
-    hashed: str
+    hashed: str,
 ) -> bool:
-
     try:
-
         return bcrypt.checkpw(
             plain.encode("utf-8"),
-            hashed.encode("utf-8")
+            hashed.encode("utf-8"),
         )
-
     except Exception:
-
         return False
 
 
@@ -216,9 +244,8 @@ def verify_password(
 
 def create_token(
     user_id: str,
-    email: str
+    email: str,
 ) -> str:
-
     payload = {
         "sub": user_id,
         "email": email,
@@ -232,86 +259,74 @@ def create_token(
     return jwt.encode(
         payload,
         JWT_SECRET,
-        algorithm=JWT_ALGORITHM
+        algorithm=JWT_ALGORITHM,
     )
 
 
 # =========================================================
-# AUTH DEPENDENCY
+# AUTH
 # =========================================================
 
 async def get_admin(
     creds: HTTPAuthorizationCredentials = Depends(
         security
-    )
+    ),
 ):
-
     database = require_db()
 
     if not creds:
-
         raise HTTPException(
             status_code=401,
-            detail="Not authenticated"
+            detail="Not authenticated",
         )
 
     try:
-
         payload = jwt.decode(
             creds.credentials,
             JWT_SECRET,
-            algorithms=[JWT_ALGORITHM]
+            algorithms=[JWT_ALGORITHM],
         )
 
         if payload.get("type") != "access":
-
             raise HTTPException(
                 status_code=401,
-                detail="Invalid token"
+                detail="Invalid token",
             )
 
         user_id = payload.get("sub")
 
         if not user_id:
-
             raise HTTPException(
                 status_code=401,
-                detail="Invalid token"
+                detail="Invalid token",
             )
 
     except jwt.ExpiredSignatureError:
-
         raise HTTPException(
             status_code=401,
-            detail="Token expired"
+            detail="Token expired",
         )
 
     except jwt.InvalidTokenError:
-
         raise HTTPException(
             status_code=401,
-            detail="Invalid token"
+            detail="Invalid token",
         )
 
     user = await database.admin_users.find_one(
-        {
-            "id": user_id
-        },
-        {
-            "_id": 0
-        }
+        {"id": user_id},
+        {"_id": 0},
     )
 
     if not user:
-
         raise HTTPException(
             status_code=401,
-            detail="User not found"
+            detail="User not found",
         )
 
     user.pop(
         "password_hash",
-        None
+        None,
     )
 
     return user
@@ -322,15 +337,14 @@ async def get_admin(
 # =========================================================
 
 def slugify(
-    text: str
+    text: str,
 ) -> str:
-
     text = text.strip().lower()
 
     text = re.sub(
         r"[^a-z0-9]+",
         "-",
-        text
+        text,
     )
 
     text = text.strip("-")
@@ -342,7 +356,6 @@ def slugify(
 
 
 def utc_now():
-
     return datetime.now(
         timezone.utc
     ).isoformat()
@@ -353,90 +366,360 @@ def utc_now():
 # =========================================================
 
 class LoginIn(BaseModel):
-
     email: str
     password: str
 
 
 class ProjectIn(BaseModel):
-
     title: str
-
     slug: Optional[str] = None
-
     category: str = "graphic-design"
-
     year: str = ""
-
     client: str = ""
-
     role: str = ""
-
     description: str = ""
-
     cover: str = ""
-
     gallery: List[str] = []
-
     video_url: str = ""
-
     tools: List[str] = []
-
     featured: bool = False
-
     published: bool = True
-
     order: int = 0
-
     seo_title: str = ""
-
     seo_description: str = ""
 
 
 class CategoryIn(BaseModel):
-
     name: str
 
 
 class MessageIn(BaseModel):
-
     name: str
-
     email: str
-
     company: str = ""
-
     project_type: str = ""
-
     budget: str = ""
-
     message: str
 
 
 class MessageStatusIn(BaseModel):
-
     status: str
 
 
 class SettingsIn(BaseModel):
-
     brand_name: str = ""
-
     tagline: str = ""
-
     email: str = ""
-
     instagram: str = ""
-
     behance: str = ""
-
     linkedin: str = ""
-
     location: str = ""
-
     portrait: str = ""
-
     about_bio: str = ""
+
+
+# =========================================================
+# GMAIL SMTP EMAIL
+# =========================================================
+
+def send_message_notification(
+    data: MessageIn,
+) -> bool:
+
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        logger.warning(
+            "Email tidak dikirim karena "
+            "SMTP_USERNAME atau SMTP_PASSWORD kosong."
+        )
+        return False
+
+    if not NOTIFICATION_EMAIL:
+        logger.warning(
+            "NOTIFICATION_EMAIL belum tersedia."
+        )
+        return False
+
+    subject = (
+        "Pesan Baru dari Website - "
+        f"{data.name}"
+    )
+
+    text_body = f"""
+Pesan Baru dari Website
+Jeghout Visualworks
+
+Nama: {data.name}
+Email: {data.email}
+Perusahaan: {data.company or "-"}
+Project Type: {data.project_type or "-"}
+Budget: {data.budget or "-"}
+
+Message:
+{data.message}
+"""
+
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pesan Baru - Jeghout Visualworks</title>
+</head>
+
+<body style="
+margin:0;
+padding:30px;
+background:#f5f5f5;
+font-family:Arial,Helvetica,sans-serif;
+color:#222;
+">
+
+<div style="
+max-width:680px;
+margin:auto;
+background:#fff;
+border:1px solid #e5e5e5;
+border-radius:12px;
+overflow:hidden;
+">
+
+<div style="
+padding:28px;
+background:#111;
+color:#fff;
+">
+
+<h1 style="margin:0;font-size:24px;">
+Pesan Baru
+</h1>
+
+<p style="margin:8px 0 0;color:#ccc;">
+Jeghout Visualworks
+</p>
+
+</div>
+
+<div style="padding:28px;">
+
+<p>
+Ada pesan baru yang masuk melalui website
+<strong>Jeghout Visualworks</strong>.
+</p>
+
+<h3>Informasi Pengirim</h3>
+
+<table style="
+width:100%;
+border-collapse:collapse;
+">
+
+<tr>
+<td style="
+padding:10px 0;
+width:160px;
+font-weight:bold;
+vertical-align:top;
+">
+Nama
+</td>
+
+<td style="padding:10px 0;">
+{data.name}
+</td>
+</tr>
+
+<tr>
+<td style="
+padding:10px 0;
+font-weight:bold;
+vertical-align:top;
+">
+Email
+</td>
+
+<td style="padding:10px 0;">
+{data.email}
+</td>
+</tr>
+
+<tr>
+<td style="
+padding:10px 0;
+font-weight:bold;
+vertical-align:top;
+">
+Perusahaan
+</td>
+
+<td style="padding:10px 0;">
+{data.company or "-"}
+</td>
+</tr>
+
+<tr>
+<td style="
+padding:10px 0;
+font-weight:bold;
+vertical-align:top;
+">
+Project Type
+</td>
+
+<td style="padding:10px 0;">
+{data.project_type or "-"}
+</td>
+</tr>
+
+<tr>
+<td style="
+padding:10px 0;
+font-weight:bold;
+vertical-align:top;
+">
+Budget
+</td>
+
+<td style="padding:10px 0;">
+{data.budget or "-"}
+</td>
+</tr>
+
+</table>
+
+<h3 style="
+margin-top:28px;
+">
+Message
+</h3>
+
+<div style="
+padding:20px;
+background:#f7f7f7;
+border-radius:8px;
+line-height:1.7;
+white-space:pre-wrap;
+">
+
+{data.message}
+
+</div>
+
+<p style="
+margin-top:28px;
+padding-top:20px;
+border-top:1px solid #eee;
+font-size:13px;
+color:#777;
+">
+
+Email ini dikirim otomatis dari
+website Jeghout Visualworks.
+
+<br><br>
+
+Klik Reply untuk membalas langsung kepada:
+{data.email}
+
+</p>
+
+</div>
+
+</div>
+
+</body>
+</html>
+"""
+
+    message = MIMEMultipart(
+        "alternative"
+    )
+
+    message["Subject"] = subject
+
+    message["From"] = formataddr(
+        (
+            "Jeghout Visualworks",
+            SMTP_USERNAME,
+        )
+    )
+
+    message["To"] = NOTIFICATION_EMAIL
+
+    message["Reply-To"] = data.email
+
+    message.attach(
+        MIMEText(
+            text_body,
+            "plain",
+            "utf-8",
+        )
+    )
+
+    message.attach(
+        MIMEText(
+            html_body,
+            "html",
+            "utf-8",
+        )
+    )
+
+    try:
+
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP(
+            SMTP_HOST,
+            SMTP_PORT,
+            timeout=20,
+        ) as server:
+
+            server.ehlo()
+
+            server.starttls(
+                context=context
+            )
+
+            server.ehlo()
+
+            server.login(
+                SMTP_USERNAME,
+                SMTP_PASSWORD,
+            )
+
+            server.sendmail(
+                SMTP_USERNAME,
+                [
+                    NOTIFICATION_EMAIL
+                ],
+                message.as_string(),
+            )
+
+        logger.info(
+            "Gmail SMTP berhasil mengirim "
+            "notifikasi ke %s",
+            NOTIFICATION_EMAIL,
+        )
+
+        return True
+
+    except smtplib.SMTPAuthenticationError:
+
+        logger.error(
+            "Gmail SMTP authentication gagal. "
+            "Pastikan SMTP_PASSWORD adalah "
+            "Sandi Aplikasi Google 16 digit."
+        )
+
+        return False
+
+    except Exception as exc:
+
+        logger.exception(
+            "Gagal mengirim email Gmail SMTP: %s",
+            exc,
+        )
+
+        return False
 
 
 # =========================================================
@@ -467,16 +750,15 @@ async def health():
 
         try:
 
-            await db.command(
-                "ping"
-            )
+            await db.command("ping")
 
             database_status = "connected"
 
         except Exception as exc:
 
             logger.error(
-                f"MongoDB health check failed: {exc}"
+                "MongoDB health check failed: %s",
+                exc,
             )
 
             database_status = "error"
@@ -489,6 +771,13 @@ async def health():
             if BLOB_READ_WRITE_TOKEN
             else "not_configured"
         ),
+        "email": (
+            "configured"
+            if SMTP_USERNAME
+            and SMTP_PASSWORD
+            else "not_configured"
+        ),
+        "email_provider": "gmail_smtp",
         "db_name": DB_NAME,
     }
 
@@ -499,7 +788,7 @@ async def health():
 
 @api.post("/auth/login")
 async def login(
-    data: LoginIn
+    data: LoginIn,
 ):
 
     database = require_db()
@@ -511,16 +800,14 @@ async def login(
     )
 
     user = await database.admin_users.find_one(
-        {
-            "email": email
-        }
+        {"email": email}
     )
 
     if not user:
 
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password"
+            detail="Invalid email or password",
         )
 
     password_hash = user.get(
@@ -531,22 +818,22 @@ async def login(
 
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password"
+            detail="Invalid email or password",
         )
 
     if not verify_password(
         data.password,
-        password_hash
+        password_hash,
     ):
 
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password"
+            detail="Invalid email or password",
         )
 
     token = create_token(
         user["id"],
-        email
+        email,
     )
 
     return {
@@ -556,7 +843,7 @@ async def login(
             "email": email,
             "name": user.get(
                 "name",
-                "Admin"
+                "Admin",
             ),
         },
     }
@@ -568,7 +855,7 @@ async def login(
 
 @api.get("/auth/me")
 async def me(
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     return admin
@@ -584,12 +871,8 @@ async def get_settings():
     database = require_db()
 
     settings = await database.site_settings.find_one(
-        {
-            "id": "site"
-        },
-        {
-            "_id": 0
-        }
+        {"id": "site"},
+        {"_id": 0},
     )
 
     return settings or {}
@@ -606,12 +889,10 @@ async def list_categories():
 
     return await database.categories.find(
         {},
-        {
-            "_id": 0
-        }
+        {"_id": 0},
     ).sort(
         "name",
-        1
+        1,
     ).to_list(50)
 
 
@@ -623,14 +904,14 @@ async def list_categories():
 async def list_projects(
     category: Optional[str] = None,
     featured: Optional[bool] = None,
-    limit: int = 60
+    limit: int = 60,
 ):
 
     database = require_db()
 
     limit = max(
         1,
-        min(limit, 100)
+        min(limit, 100),
     )
 
     query = {
@@ -647,9 +928,7 @@ async def list_projects(
 
     return await database.projects.find(
         query,
-        {
-            "_id": 0
-        }
+        {"_id": 0},
     ).sort(
         [
             ("order", 1),
@@ -664,7 +943,7 @@ async def list_projects(
 
 @api.get("/projects/{slug}")
 async def get_project(
-    slug: str
+    slug: str,
 ):
 
     database = require_db()
@@ -674,16 +953,14 @@ async def get_project(
             "slug": slug,
             "published": True,
         },
-        {
-            "_id": 0
-        }
+        {"_id": 0},
     )
 
     if not project:
 
         raise HTTPException(
             status_code=404,
-            detail="Project not found"
+            detail="Project not found",
         )
 
     related = await database.projects.find(
@@ -694,12 +971,10 @@ async def get_project(
             },
             "category": project["category"],
         },
-        {
-            "_id": 0
-        }
+        {"_id": 0},
     ).sort(
         "order",
-        1
+        1,
     ).limit(3).to_list(3)
 
     if len(related) < 3:
@@ -714,12 +989,10 @@ async def get_project(
                     "$ne": project["category"]
                 },
             },
-            {
-                "_id": 0
-            }
+            {"_id": 0},
         ).sort(
             "order",
-            1
+            1,
         ).limit(
             3 - len(related)
         ).to_list(
@@ -742,7 +1015,7 @@ async def get_project(
 
 @api.post("/messages")
 async def create_message(
-    data: MessageIn
+    data: MessageIn,
 ):
 
     database = require_db()
@@ -761,6 +1034,20 @@ async def create_message(
         doc
     )
 
+    try:
+
+        send_message_notification(
+            data
+        )
+
+    except Exception as exc:
+
+        logger.exception(
+            "Message tersimpan tetapi "
+            "email notification gagal: %s",
+            exc,
+        )
+
     return {
         "ok": True
     }
@@ -772,16 +1059,14 @@ async def create_message(
 
 @api.get("/admin/projects")
 async def admin_list_projects(
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     return await database.projects.find(
         {},
-        {
-            "_id": 0
-        }
+        {"_id": 0},
     ).sort(
         [
             ("order", 1),
@@ -797,25 +1082,21 @@ async def admin_list_projects(
 @api.get("/admin/projects/{pid}")
 async def admin_get_project(
     pid: str,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     project = await database.projects.find_one(
-        {
-            "id": pid
-        },
-        {
-            "_id": 0
-        }
+        {"id": pid},
+        {"_id": 0},
     )
 
     if not project:
 
         raise HTTPException(
             status_code=404,
-            detail="Project not found"
+            detail="Project not found",
         )
 
     return project
@@ -828,7 +1109,7 @@ async def admin_get_project(
 @api.post("/admin/projects")
 async def admin_create_project(
     data: ProjectIn,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
@@ -841,12 +1122,11 @@ async def admin_create_project(
     )
 
     slug = base
+
     number = 1
 
     while await database.projects.find_one(
-        {
-            "slug": slug
-        }
+        {"slug": slug}
     ):
 
         number += 1
@@ -867,7 +1147,7 @@ async def admin_create_project(
 
     doc.pop(
         "_id",
-        None
+        None,
     )
 
     return doc
@@ -881,22 +1161,20 @@ async def admin_create_project(
 async def admin_update_project(
     pid: str,
     data: ProjectIn,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     existing = await database.projects.find_one(
-        {
-            "id": pid
-        }
+        {"id": pid}
     )
 
     if not existing:
 
         raise HTTPException(
             status_code=404,
-            detail="Project not found"
+            detail="Project not found",
         )
 
     doc = data.model_dump()
@@ -907,6 +1185,7 @@ async def admin_update_project(
     )
 
     slug = base
+
     number = 1
 
     while await database.projects.find_one(
@@ -927,21 +1206,13 @@ async def admin_update_project(
     doc["slug"] = slug
 
     await database.projects.update_one(
-        {
-            "id": pid
-        },
-        {
-            "$set": doc
-        }
+        {"id": pid},
+        {"$set": doc},
     )
 
     return await database.projects.find_one(
-        {
-            "id": pid
-        },
-        {
-            "_id": 0
-        }
+        {"id": pid},
+        {"_id": 0},
     )
 
 
@@ -952,22 +1223,20 @@ async def admin_update_project(
 @api.delete("/admin/projects/{pid}")
 async def admin_delete_project(
     pid: str,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     result = await database.projects.delete_one(
-        {
-            "id": pid
-        }
+        {"id": pid}
     )
 
     if result.deleted_count == 0:
 
         raise HTTPException(
             status_code=404,
-            detail="Project not found"
+            detail="Project not found",
         )
 
     return {
@@ -982,7 +1251,7 @@ async def admin_delete_project(
 @api.post("/admin/categories")
 async def admin_create_category(
     data: CategoryIn,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
@@ -993,24 +1262,20 @@ async def admin_create_category(
 
         raise HTTPException(
             status_code=400,
-            detail="Category name is required"
+            detail="Category name is required",
         )
 
-    slug = slugify(
-        name
-    )
+    slug = slugify(name)
 
     exists = await database.categories.find_one(
-        {
-            "slug": slug
-        }
+        {"slug": slug}
     )
 
     if exists:
 
         raise HTTPException(
             status_code=400,
-            detail="Category already exists"
+            detail="Category already exists",
         )
 
     doc = {
@@ -1026,7 +1291,7 @@ async def admin_create_category(
 
     doc.pop(
         "_id",
-        None
+        None,
     )
 
     return doc
@@ -1039,22 +1304,20 @@ async def admin_create_category(
 @api.delete("/admin/categories/{cid}")
 async def admin_delete_category(
     cid: str,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     result = await database.categories.delete_one(
-        {
-            "id": cid
-        }
+        {"id": cid}
     )
 
     if result.deleted_count == 0:
 
         raise HTTPException(
             status_code=404,
-            detail="Category not found"
+            detail="Category not found",
         )
 
     return {
@@ -1068,19 +1331,17 @@ async def admin_delete_category(
 
 @api.get("/admin/messages")
 async def admin_list_messages(
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     return await database.messages.find(
         {},
-        {
-            "_id": 0
-        }
+        {"_id": 0},
     ).sort(
         "created_at",
-        -1
+        -1,
     ).to_list(300)
 
 
@@ -1092,7 +1353,7 @@ async def admin_list_messages(
 async def admin_update_message(
     mid: str,
     data: MessageStatusIn,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
@@ -1107,25 +1368,23 @@ async def admin_update_message(
 
         raise HTTPException(
             status_code=400,
-            detail="Invalid status"
+            detail="Invalid status",
         )
 
     result = await database.messages.update_one(
-        {
-            "id": mid
-        },
+        {"id": mid},
         {
             "$set": {
                 "status": data.status
             }
-        }
+        },
     )
 
     if result.matched_count == 0:
 
         raise HTTPException(
             status_code=404,
-            detail="Message not found"
+            detail="Message not found",
         )
 
     return {
@@ -1140,22 +1399,20 @@ async def admin_update_message(
 @api.delete("/admin/messages/{mid}")
 async def admin_delete_message(
     mid: str,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
     result = await database.messages.delete_one(
-        {
-            "id": mid
-        }
+        {"id": mid}
     )
 
     if result.deleted_count == 0:
 
         raise HTTPException(
             status_code=404,
-            detail="Message not found"
+            detail="Message not found",
         )
 
     return {
@@ -1170,7 +1427,7 @@ async def admin_delete_message(
 @api.put("/admin/settings")
 async def admin_update_settings(
     data: SettingsIn,
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
@@ -1182,22 +1439,14 @@ async def admin_update_settings(
     doc["updated_at"] = utc_now()
 
     await database.site_settings.update_one(
-        {
-            "id": "site"
-        },
-        {
-            "$set": doc
-        },
-        upsert=True
+        {"id": "site"},
+        {"$set": doc},
+        upsert=True,
     )
 
     return await database.site_settings.find_one(
-        {
-            "id": "site"
-        },
-        {
-            "_id": 0
-        }
+        {"id": "site"},
+        {"_id": 0},
     )
 
 
@@ -1207,31 +1456,23 @@ async def admin_update_settings(
 
 @api.get("/admin/stats")
 async def admin_stats(
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     database = require_db()
 
-    total = await database.projects.count_documents(
-        {}
-    )
+    total = await database.projects.count_documents({})
 
     published = await database.projects.count_documents(
-        {
-            "published": True
-        }
+        {"published": True}
     )
 
     featured = await database.projects.count_documents(
-        {
-            "featured": True
-        }
+        {"featured": True}
     )
 
     unread = await database.messages.count_documents(
-        {
-            "status": "unread"
-        }
+        {"status": "unread"}
     )
 
     return {
@@ -1263,7 +1504,7 @@ MAX_UPLOAD_SIZE = 15 * 1024 * 1024
 # =========================================================
 
 def process_image(
-    raw: bytes
+    raw: bytes,
 ) -> bytes:
 
     image = Image.open(
@@ -1281,7 +1522,7 @@ def process_image(
         background = Image.new(
             "RGB",
             image.size,
-            "white"
+            "white",
         )
 
         if image.mode != "RGBA":
@@ -1294,7 +1535,7 @@ def process_image(
             image,
             mask=image.getchannel(
                 "A"
-            )
+            ),
         )
 
         image = background
@@ -1308,9 +1549,9 @@ def process_image(
     image.thumbnail(
         (
             1920,
-            1920
+            1920,
         ),
-        Image.Resampling.LANCZOS
+        Image.Resampling.LANCZOS,
     )
 
     output = io.BytesIO()
@@ -1319,19 +1560,19 @@ def process_image(
         output,
         "WEBP",
         quality=84,
-        method=6
+        method=6,
     )
 
     return output.getvalue()
 
 
 # =========================================================
-# VERCEL BLOB UPLOAD
+# VERCEL BLOB
 # =========================================================
 
 def upload_to_vercel_blob(
     data: bytes,
-    filename: str
+    filename: str,
 ) -> str:
 
     if not BLOB_READ_WRITE_TOKEN:
@@ -1404,12 +1645,12 @@ def upload_to_vercel_blob(
 
 
 # =========================================================
-# LOCAL FALLBACK UPLOAD
+# LOCAL FALLBACK
 # =========================================================
 
 def save_local_upload(
     data: bytes,
-    filename: str
+    filename: str,
 ) -> str:
 
     destination = (
@@ -1432,7 +1673,7 @@ def save_local_upload(
 @api.post("/admin/upload")
 async def admin_upload(
     files: List[UploadFile] = File(...),
-    admin=Depends(get_admin)
+    admin=Depends(get_admin),
 ):
 
     urls = []
@@ -1455,7 +1696,7 @@ async def admin_upload(
                 detail=(
                     "Unsupported file type: "
                     f"{extension}"
-                )
+                ),
             )
 
         raw = await uploaded_file.read()
@@ -1464,7 +1705,7 @@ async def admin_upload(
 
             raise HTTPException(
                 status_code=400,
-                detail="Empty file"
+                detail="Empty file",
             )
 
         if len(raw) > MAX_UPLOAD_SIZE:
@@ -1474,7 +1715,7 @@ async def admin_upload(
                 detail=(
                     "File terlalu besar. "
                     "Maksimal 15MB."
-                )
+                ),
             )
 
         try:
@@ -1486,21 +1727,18 @@ async def admin_upload(
         except Exception as exc:
 
             logger.error(
-                f"Image processing failed: {exc}"
+                "Image processing failed: %s",
+                exc,
             )
 
             raise HTTPException(
                 status_code=400,
-                detail="Invalid image file"
+                detail="Invalid image file",
             )
 
         name = (
             f"{uuid.uuid4().hex}.webp"
         )
-
-        # -------------------------------------------------
-        # VERCEL BLOB
-        # -------------------------------------------------
 
         if BLOB_READ_WRITE_TOKEN:
 
@@ -1509,7 +1747,7 @@ async def admin_upload(
                 blob_url = (
                     upload_to_vercel_blob(
                         webp_data,
-                        name
+                        name,
                     )
                 )
 
@@ -1517,42 +1755,29 @@ async def admin_upload(
                     blob_url
                 )
 
-                logger.info(
-                    "Upload berhasil ke "
-                    f"Vercel Blob: {blob_url}"
-                )
-
                 continue
 
             except Exception as exc:
 
                 logger.exception(
-                    "Vercel Blob upload failed: "
-                    f"{exc}"
+                    "Vercel Blob upload failed: %s",
+                    exc,
                 )
 
                 raise HTTPException(
                     status_code=500,
                     detail=(
                         "Upload ke Vercel Blob gagal."
-                    )
+                    ),
                 )
-
-        # -------------------------------------------------
-        # LOCAL DEVELOPMENT FALLBACK
-        # -------------------------------------------------
 
         local_url = save_local_upload(
             webp_data,
-            name
+            name,
         )
 
         urls.append(
             local_url
-        )
-
-        logger.info(
-            f"Upload lokal berhasil: {local_url}"
         )
 
     return {
@@ -1561,7 +1786,7 @@ async def admin_upload(
 
 
 # =========================================================
-# INCLUDE API ROUTER
+# INCLUDE ROUTER
 # =========================================================
 
 app.include_router(
@@ -1580,7 +1805,7 @@ app.mount(
             UPLOAD_DIR
         )
     ),
-    name="uploads"
+    name="uploads",
 )
 
 
@@ -1594,11 +1819,8 @@ cors_origins = [
     if origin.strip()
 ]
 
-
 if not cors_origins:
-
     cors_origins = ["*"]
-
 
 if "*" in cors_origins:
 
@@ -1633,16 +1855,27 @@ async def startup():
     )
 
     logger.info(
-        f"Database name: {DB_NAME}"
+        "Database name: %s",
+        DB_NAME,
     )
 
     logger.info(
-        "Vercel Blob: "
-        + (
+        "Vercel Blob: %s",
+        (
             "configured"
             if BLOB_READ_WRITE_TOKEN
             else "NOT CONFIGURED"
-        )
+        ),
+    )
+
+    logger.info(
+        "Gmail SMTP: %s",
+        (
+            "configured"
+            if SMTP_USERNAME
+            and SMTP_PASSWORD
+            else "NOT CONFIGURED"
+        ),
     )
 
     if db is None:
@@ -1653,10 +1886,6 @@ async def startup():
         )
 
         return
-
-    # -----------------------------------------------------
-    # MONGODB CONNECTION TEST
-    # -----------------------------------------------------
 
     try:
 
@@ -1671,14 +1900,11 @@ async def startup():
     except Exception as exc:
 
         logger.error(
-            f"MongoDB connection failed: {exc}"
+            "MongoDB connection failed: %s",
+            exc,
         )
 
         return
-
-    # -----------------------------------------------------
-    # DATABASE SEED
-    # -----------------------------------------------------
 
     try:
 
@@ -1686,7 +1912,7 @@ async def startup():
 
         await seed_all(
             db,
-            ROOT_DIR
+            ROOT_DIR,
         )
 
         logger.info(
@@ -1696,11 +1922,9 @@ async def startup():
     except Exception as exc:
 
         logger.exception(
-            f"Database seed failed: {exc}"
+            "Database seed failed: %s",
+            exc,
         )
-
-        # Seed gagal tidak membuat API crash.
-        return
 
 
 # =========================================================
