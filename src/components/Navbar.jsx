@@ -68,7 +68,7 @@ export default function Navbar() {
           <Link
             to="/"
             data-testid="nav-logo"
-            className="flex items-center gap-3 group"
+            className="flex items-center gap-3 group min-w-0"
           >
             {/* Logo Image */}
 
@@ -82,13 +82,13 @@ export default function Navbar() {
 
             {/* Brand Name */}
 
-            <div className="flex items-baseline">
-              <span className="font-display font-bold text-lg tracking-tight">
+            <div className="flex items-baseline min-w-0">
+              <span className="font-display font-bold text-lg tracking-tight whitespace-nowrap">
                 Jeghout
                 <span className="text-[#8B35FF]">.</span>
               </span>
 
-              <span className="hidden sm:inline text-[#9A9A9F] font-normal text-xs ml-2 tracking-[0.2em] uppercase">
+              <span className="text-[#9A9A9F] font-normal text-[10px] sm:text-xs ml-2 tracking-[0.15em] sm:tracking-[0.2em] uppercase whitespace-nowrap">
                 visualworks
               </span>
             </div>
@@ -142,7 +142,7 @@ export default function Navbar() {
           <button
             data-testid="nav-hamburger"
             onClick={() => setOpen(true)}
-            className="md:hidden p-2 text-white"
+            className="md:hidden p-2 text-white shrink-0"
             aria-label="Open menu"
           >
             <Menu size={24} />
@@ -182,7 +182,7 @@ export default function Navbar() {
               <Link
                 to="/"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 group"
+                className="flex items-center gap-3 group min-w-0"
               >
                 <div className="w-8 h-8 shrink-0 flex items-center justify-center">
                   <img
@@ -192,10 +192,16 @@ export default function Navbar() {
                   />
                 </div>
 
-                <span className="font-display font-bold text-lg">
-                  Jeghout
-                  <span className="text-[#8B35FF]">.</span>
-                </span>
+                <div className="flex items-baseline min-w-0">
+                  <span className="font-display font-bold text-lg tracking-tight whitespace-nowrap">
+                    Jeghout
+                    <span className="text-[#8B35FF]">.</span>
+                  </span>
+
+                  <span className="text-[#9A9A9F] font-normal text-[10px] ml-2 tracking-[0.12em] uppercase whitespace-nowrap">
+                    visualworks
+                  </span>
+                </div>
               </Link>
 
               {/* Close Button */}
@@ -203,7 +209,7 @@ export default function Navbar() {
               <button
                 onClick={() => setOpen(false)}
                 data-testid="mobile-menu-close"
-                className="p-2 text-white"
+                className="p-2 text-white shrink-0"
                 aria-label="Close menu"
               >
                 <X size={26} />
