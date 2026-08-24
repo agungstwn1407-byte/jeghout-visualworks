@@ -9,7 +9,6 @@ import ProjectCard from "@/components/ProjectCard";
 
 /* =========================================================
    VIDEO EMBED URL
-
    Supports:
    - YouTube
    - YouTube Live
@@ -26,7 +25,6 @@ function embedUrl(url) {
 
   try {
     const parsed = new URL(value);
-
     const hostname = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname;
 
@@ -40,7 +38,6 @@ function embedUrl(url) {
       hostname === "m.youtube.com"
     ) {
       /* Normal YouTube */
-
       if (pathname === "/watch") {
         const videoId = parsed.searchParams.get("v");
 
@@ -50,7 +47,6 @@ function embedUrl(url) {
       }
 
       /* YouTube Live */
-
       if (pathname.startsWith("/live/")) {
         const videoId = pathname
           .replace("/live/", "")
@@ -62,7 +58,6 @@ function embedUrl(url) {
       }
 
       /* YouTube Shorts */
-
       if (pathname.startsWith("/shorts/")) {
         const videoId = pathname
           .replace("/shorts/", "")
@@ -74,7 +69,6 @@ function embedUrl(url) {
       }
 
       /* YouTube Embed */
-
       if (pathname.startsWith("/embed/")) {
         return value;
       }
@@ -82,7 +76,6 @@ function embedUrl(url) {
 
     /* =====================================================
        YOUTUBE SHORT URL
-
        https://youtu.be/VIDEO_ID
     ===================================================== */
 
@@ -98,7 +91,6 @@ function embedUrl(url) {
 
     /* =====================================================
        VIMEO
-
        https://vimeo.com/123456789
     ===================================================== */
 
@@ -122,7 +114,6 @@ function embedUrl(url) {
 
     /* =====================================================
        GOOGLE DRIVE
-
        https://drive.google.com/file/d/FILE_ID/view
     ===================================================== */
 
@@ -324,20 +315,22 @@ export default function ProjectDetail() {
 
   const video = embedUrl(p.video_url);
 
-  /* =======================================================
-     VIDEO ASPECT RATIO
+  /*
+   * Detect Google Drive.
+   */
 
-     Backend dapat mengirim:
-       video_width
-       video_height
-       video_aspect_ratio
+  const isGoogleDriveVideo =
+    video?.includes("drive.google.com");
 
-     Fallback 16:9 untuk YouTube/Vimeo/Drive jika
-     metadata belum tersedia.
-  ======================================================= */
+  /*
+   * Metadata video.
+   */
 
-  const videoWidth = Number(p.video_width);
-  const videoHeight = Number(p.video_height);
+  const videoWidth =
+    Number(p.video_width);
+
+  const videoHeight =
+    Number(p.video_height);
 
   const parsedAspectRatio =
     p.video_aspect_ratio ||
@@ -348,8 +341,17 @@ export default function ProjectDetail() {
         : null
     );
 
+  /*
+   * Google Drive selalu menggunakan 16:9.
+   *
+   * Ini mencegah metadata backend yang salah
+   * membuat frame menjadi terlalu pendek.
+   */
+
   const videoAspectRatio =
-    parsedAspectRatio || "16 / 9";
+    isGoogleDriveVideo
+      ? "16 / 9"
+      : parsedAspectRatio || "16 / 9";
 
   /* =======================================================
      MAIN
@@ -360,7 +362,6 @@ export default function ProjectDetail() {
       className="pb-24"
       data-testid="project-detail"
     >
-
       {/* ===================================================
           HEADER
       =================================================== */}
@@ -375,7 +376,6 @@ export default function ProjectDetail() {
           md:pt-44
         "
       >
-
         {/* BACK */}
 
         <motion.div
@@ -473,9 +473,7 @@ export default function ProjectDetail() {
           {p.title}
         </motion.h1>
 
-        {/* =================================================
-            PROJECT META
-        ================================================= */}
+        {/* PROJECT META */}
 
         <motion.div
           initial={{
@@ -503,7 +501,6 @@ export default function ProjectDetail() {
           "
           data-testid="project-meta"
         >
-
           {/* CLIENT */}
 
           <div>
@@ -621,15 +618,11 @@ export default function ProjectDetail() {
               )}
             </div>
           </div>
-
         </motion.div>
       </div>
 
       {/* ===================================================
           HERO / COVER
-
-          Mengikuti rasio asli file upload.
-          Tidak menggunakan object-cover.
       =================================================== */}
 
       <div
@@ -690,7 +683,6 @@ export default function ProjectDetail() {
           gap-10
         "
       >
-
         <Reveal className="md:col-span-4">
           <p
             className="
@@ -722,17 +714,10 @@ export default function ProjectDetail() {
             {p.description}
           </p>
         </Reveal>
-
       </div>
 
       {/* ===================================================
           VIDEO
-
-          Rasio mengikuti metadata video dari backend.
-          Jika metadata belum tersedia, fallback ke 16:9.
-
-          Tidak menggunakan aspect-video secara paksa,
-          sehingga Google Drive tidak terpotong pada mobile.
       =================================================== */}
 
       {video && (
@@ -760,28 +745,66 @@ export default function ProjectDetail() {
               }}
               data-testid="project-video"
             >
-              <iframe
-                src={video}
-                title={`${p.title} video`}
-                className="
-                  absolute
-                  inset-0
-                  w-full
-                  h-full
-                  border-0
-                "
-                loading="lazy"
-                allow="
-                  accelerometer;
-                  autoplay;
-                  clipboard-write;
-                  encrypted-media;
-                  gyroscope;
-                  picture-in-picture;
-                  fullscreen
-                "
-                allowFullScreen
-              />
+              {isGoogleDriveVideo ? (
+                /*
+                 * GOOGLE DRIVE
+                 *
+                 * Iframe dibuat sedikit lebih tinggi
+                 * agar player Drive tidak memotong
+                 * bagian bawah video.
+                 */
+
+                <iframe
+                  src={video}
+                  title={`${p.title} video`}
+                  className="
+                    absolute
+                    left-0
+                    top-[-1px]
+                    w-full
+                    h-[calc(100%+2px)]
+                    border-0
+                  "
+                  loading="lazy"
+                  allow="
+                    accelerometer;
+                    autoplay;
+                    clipboard-write;
+                    encrypted-media;
+                    gyroscope;
+                    picture-in-picture;
+                    fullscreen
+                  "
+                  allowFullScreen
+                />
+              ) : (
+                /*
+                 * YOUTUBE / VIMEO
+                 */
+
+                <iframe
+                  src={video}
+                  title={`${p.title} video`}
+                  className="
+                    absolute
+                    inset-0
+                    w-full
+                    h-full
+                    border-0
+                  "
+                  loading="lazy"
+                  allow="
+                    accelerometer;
+                    autoplay;
+                    clipboard-write;
+                    encrypted-media;
+                    gyroscope;
+                    picture-in-picture;
+                    fullscreen
+                  "
+                  allowFullScreen
+                />
+              )}
             </div>
           </Reveal>
         </div>
@@ -789,15 +812,6 @@ export default function ProjectDetail() {
 
       {/* ===================================================
           GALLERY
-
-          MOBILE = 2 KOLOM
-          DESKTOP = 2 KOLOM
-
-          Semua gambar:
-          - mengikuti rasio upload
-          - tidak dipotong
-          - tidak dipaksa aspect ratio
-          - tersusun masonry
       =================================================== */}
 
       {p.gallery?.length > 0 && (
@@ -861,7 +875,6 @@ export default function ProjectDetail() {
           "
           data-testid="more-projects"
         >
-
           <div
             className="
               flex
@@ -935,10 +948,8 @@ export default function ProjectDetail() {
                 )
               )}
           </div>
-
         </div>
       )}
-
     </main>
   );
 }
