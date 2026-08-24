@@ -22,11 +22,11 @@ function normalizeAspectRatio(value) {
   if (!value) return null;
 
   const ratio = String(value).trim();
-
   if (!ratio) return null;
 
-  // Accept both "16:9" and "16 / 9".
-  const colonMatch = ratio.match(/^(\\d+(?:\\.\\d+)?)\\s*:\s*(\\d+(?:\\.\\d+)?)$/);
+  const colonMatch = ratio.match(
+    /^(\\d+(?:\\.\\d+)?)\\s*:\\s*(\\d+(?:\\.\\d+)?)$/
+  );
 
   if (colonMatch) {
     return `${colonMatch[1]} / ${colonMatch[2]}`;
@@ -337,10 +337,7 @@ export default function ProjectDetail() {
    */
 
   const isGoogleDriveVideo =
-    Boolean(
-      p.video_url &&
-      /drive\.google\.com/i.test(String(p.video_url))
-    );
+    video?.includes("drive.google.com");
 
   /*
    * Metadata video.
@@ -362,12 +359,16 @@ export default function ProjectDetail() {
     );
 
   /*
-   * Rasio video:
-   * - Gunakan video_aspect_ratio jika tersedia.
-   * - Jika tidak tersedia, hitung dari video_width/video_height.
-   * - Google Drive TIDAK dipaksa 16:9 karena video Drive
-   *   dapat berupa landscape, portrait, atau square.
-   * - Fallback terakhir tetap 16:9 agar layout tidak rusak.
+   * GOOGLE DRIVE TETAP DIPAKAI.
+   *
+   * Jangan memaksa Drive menjadi 16:9.
+   * Gunakan rasio metadata project jika tersedia.
+   * Jika metadata belum ada, fallback ke 16:9.
+   *
+   * Untuk video portrait, isi:
+   * video_width = 1080
+   * video_height = 1920
+   * atau video_aspect_ratio = "9:16"
    */
 
   const videoAspectRatio =
@@ -769,17 +770,17 @@ export default function ProjectDetail() {
                 /*
                  * GOOGLE DRIVE
                  *
-                 * Drive's player UI can have its own internal chrome.
-                 * The outer frame follows the actual project ratio,
-                 * while the iframe fills it exactly. No cover/crop.
+                 * Iframe dibuat sedikit lebih tinggi
+                 * agar player Drive tidak memotong
+                 * bagian bawah video.
                  */
+
                 <iframe
                   src={video}
                   title={`${p.title} video`}
                   className="
                     absolute
                     inset-0
-                    block
                     w-full
                     h-full
                     border-0
@@ -805,13 +806,13 @@ export default function ProjectDetail() {
                 /*
                  * YOUTUBE / VIMEO
                  */
+
                 <iframe
                   src={video}
                   title={`${p.title} video`}
                   className="
                     absolute
                     inset-0
-                    block
                     w-full
                     h-full
                     border-0
