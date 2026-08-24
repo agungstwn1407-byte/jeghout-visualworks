@@ -337,7 +337,10 @@ export default function ProjectDetail() {
    */
 
   const isGoogleDriveVideo =
-    video?.includes("drive.google.com");
+    Boolean(
+      p.video_url &&
+      /drive\.google\.com/i.test(String(p.video_url))
+    );
 
   /*
    * Metadata video.
@@ -766,22 +769,26 @@ export default function ProjectDetail() {
                 /*
                  * GOOGLE DRIVE
                  *
-                 * Iframe mengikuti rasio container.
-                 * Container sendiri mengikuti metadata
-                 * rasio video, sehingga portrait/landscape
-                 * tidak lagi dipaksa menjadi 16:9.
+                 * Drive's player UI can have its own internal chrome.
+                 * The outer frame follows the actual project ratio,
+                 * while the iframe fills it exactly. No cover/crop.
                  */
-
                 <iframe
                   src={video}
                   title={`${p.title} video`}
                   className="
                     absolute
                     inset-0
+                    block
                     w-full
                     h-full
                     border-0
                   "
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "block",
+                  }}
                   loading="lazy"
                   allow="
                     accelerometer;
@@ -798,13 +805,13 @@ export default function ProjectDetail() {
                 /*
                  * YOUTUBE / VIMEO
                  */
-
                 <iframe
                   src={video}
                   title={`${p.title} video`}
                   className="
                     absolute
                     inset-0
+                    block
                     w-full
                     h-full
                     border-0
