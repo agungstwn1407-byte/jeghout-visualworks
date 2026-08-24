@@ -18,6 +18,23 @@ import ProjectCard from "@/components/ProjectCard";
    - Google Drive
 ========================================================= */
 
+function normalizeAspectRatio(value) {
+  if (!value) return null;
+
+  const ratio = String(value).trim();
+
+  if (!ratio) return null;
+
+  // Accept both "16:9" and "16 / 9".
+  const colonMatch = ratio.match(/^(\\d+(?:\\.\\d+)?)\\s*:\s*(\\d+(?:\\.\\d+)?)$/);
+
+  if (colonMatch) {
+    return `${colonMatch[1]} / ${colonMatch[2]}`;
+  }
+
+  return ratio;
+}
+
 function embedUrl(url) {
   if (!url) return null;
 
@@ -333,7 +350,7 @@ export default function ProjectDetail() {
     Number(p.video_height);
 
   const parsedAspectRatio =
-    p.video_aspect_ratio ||
+    normalizeAspectRatio(p.video_aspect_ratio) ||
     (
       videoWidth > 0 &&
       videoHeight > 0
@@ -342,16 +359,16 @@ export default function ProjectDetail() {
     );
 
   /*
-   * Google Drive selalu menggunakan 16:9.
-   *
-   * Ini mencegah metadata backend yang salah
-   * membuat frame menjadi terlalu pendek.
+   * Rasio video:
+   * - Gunakan video_aspect_ratio jika tersedia.
+   * - Jika tidak tersedia, hitung dari video_width/video_height.
+   * - Google Drive TIDAK dipaksa 16:9 karena video Drive
+   *   dapat berupa landscape, portrait, atau square.
+   * - Fallback terakhir tetap 16:9 agar layout tidak rusak.
    */
 
   const videoAspectRatio =
-    isGoogleDriveVideo
-      ? "16 / 9"
-      : parsedAspectRatio || "16 / 9";
+    parsedAspectRatio || "16 / 9";
 
   /* =======================================================
      MAIN
@@ -749,9 +766,10 @@ export default function ProjectDetail() {
                 /*
                  * GOOGLE DRIVE
                  *
-                 * Iframe dibuat sedikit lebih tinggi
-                 * agar player Drive tidak memotong
-                 * bagian bawah video.
+                 * Iframe mengikuti rasio container.
+                 * Container sendiri mengikuti metadata
+                 * rasio video, sehingga portrait/landscape
+                 * tidak lagi dipaksa menjadi 16:9.
                  */
 
                 <iframe
@@ -759,10 +777,9 @@ export default function ProjectDetail() {
                   title={`${p.title} video`}
                   className="
                     absolute
-                    left-0
-                    top-[-1px]
+                    inset-0
                     w-full
-                    h-[calc(100%+2px)]
+                    h-full
                     border-0
                   "
                   loading="lazy"
