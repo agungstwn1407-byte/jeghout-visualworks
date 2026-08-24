@@ -15,10 +15,10 @@ const PROJECT_TYPES = [
 ];
 
 const BUDGETS = [
-  "Under $500",
-  "$500 — $1,000",
-  "$1,000 — $5,000",
-  "$5,000+",
+  "Di bawah Rp200.000",
+  "Rp200.000 — Rp500.000",
+  "Rp500.000 — Rp1.500.000",
+  "Rp1.500.000+",
   "Let's discuss",
 ];
 

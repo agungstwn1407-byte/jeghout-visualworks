@@ -1,11 +1,10 @@
 fastapi
-uvicorn[standard]
-python-dotenv
+uvicorn
 motor
 pymongo
-pydantic
 bcrypt
 PyJWT
+python-dotenv
 Pillow
 python-multipart
 requests

@@ -1,18 +1,23 @@
 .env
+.env.*
 backend/.env
+backend/.env.*
 
 venv/
 backend/venv/
 
 __pycache__/
 backend/__pycache__/
+api/__pycache__/
 
 *.pyc
+*.pyo
 
 backend/uploads/
 uploads/
 
 .vscode/
+
 node_modules/
 dist/
 memory/

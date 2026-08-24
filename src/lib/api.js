@@ -1,58 +1,153 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 
-/*
- * Vite menggunakan import.meta.env
- * bukan process.env
+/**
+ * =========================================================
+ * BACKEND URL
+ * =========================================================
  *
- * Buat file .env di root project jika ingin menggunakan backend:
+ * LOCAL:
+ *   http://localhost:5173
+ *   -> backend otomatis ke http://127.0.0.1:8000
  *
- * VITE_BACKEND_URL=http://localhost:8000
+ * VERCEL:
+ *   Gunakan VITE_BACKEND_URL dari Environment Variables.
+ *
+ * Contoh:
+ *   VITE_BACKEND_URL=https://backend-domain-kamu.vercel.app
+ *
  */
 
+const ENV_BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL?.trim() || "";
+
 export const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+  ENV_BACKEND_URL ||
+  (import.meta.env.DEV
+    ? "http://127.0.0.1:8000"
+    : "");
+
+
+/**
+ * =========================================================
+ * AXIOS INSTANCE
+ * =========================================================
+ */
 
 export const api = axios.create({
   baseURL: `${BACKEND_URL}/api`,
-  timeout: 10000,
+  timeout: 15000,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-/*
- * Attach authentication token
+
+/**
+ * =========================================================
+ * AUTH TOKEN
+ * =========================================================
  */
+
 api.interceptors.request.use(
-  (cfg) => {
-    const token = localStorage.getItem("jv_token");
+  (config) => {
+    const token =
+      localStorage.getItem("jv_token");
 
     if (token) {
-      cfg.headers = cfg.headers || {};
-      cfg.headers.Authorization = `Bearer ${token}`;
+      config.headers =
+        config.headers || {};
+
+      config.headers.Authorization =
+        `Bearer ${token}`;
     }
 
-    return cfg;
+    return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
-/*
- * Image URL helper
- */
-export const imgUrl = (p) => {
-  if (!p) return "";
 
-  if (p.startsWith("http")) {
-    return p;
+/**
+ * =========================================================
+ * RESPONSE INTERCEPTOR
+ * =========================================================
+ *
+ * Jika token sudah expired / tidak valid,
+ * hapus token agar user bisa login kembali.
+ */
+
+api.interceptors.response.use(
+  (response) => response,
+
+  (error) => {
+    if (error?.response?.status === 401) {
+      const requestUrl =
+        error?.config?.url || "";
+
+      // Jangan menghapus token saat request login gagal.
+      if (!requestUrl.includes("/auth/login")) {
+        localStorage.removeItem("jv_token");
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+
+/**
+ * =========================================================
+ * IMAGE URL
+ * =========================================================
+ */
+
+export const imgUrl = (path) => {
+  if (!path) {
+    return "";
   }
 
-  return `${BACKEND_URL}${p}`;
+  if (
+    path.startsWith("http://") ||
+    path.startsWith("https://") ||
+    path.startsWith("data:")
+  ) {
+    return path;
+  }
+
+  // Pastikan tidak menghasilkan //
+  if (
+    BACKEND_URL.endsWith("/") &&
+    path.startsWith("/")
+  ) {
+    return `${BACKEND_URL}${path.slice(1)}`;
+  }
+
+  if (
+    !BACKEND_URL.endsWith("/") &&
+    !path.startsWith("/")
+  ) {
+    return `${BACKEND_URL}/${path}`;
+  }
+
+  return `${BACKEND_URL}${path}`;
 };
 
-/*
- * API error formatter
+
+/**
+ * =========================================================
+ * API ERROR FORMATTER
+ * =========================================================
  */
-export function formatApiError(err) {
-  const detail = err?.response?.data?.detail;
+
+export function formatApiError(error) {
+  const responseData =
+    error?.response?.data;
+
+  const detail =
+    responseData?.detail;
 
   if (typeof detail === "string") {
     return detail;
@@ -60,18 +155,45 @@ export function formatApiError(err) {
 
   if (Array.isArray(detail)) {
     return detail
-      .map((e) => e?.msg || JSON.stringify(e))
+      .map(
+        (item) =>
+          item?.msg ||
+          JSON.stringify(item)
+      )
       .join(" ");
   }
 
-  return err?.message || "Something went wrong";
+  if (
+    responseData &&
+    typeof responseData === "string"
+  ) {
+    return responseData;
+  }
+
+  if (error?.code === "ERR_NETWORK") {
+    return (
+      "Backend tidak dapat dihubungi. " +
+      "Pastikan FastAPI berjalan di " +
+      "http://127.0.0.1:8000"
+    );
+  }
+
+  return (
+    error?.message ||
+    "Something went wrong"
+  );
 }
 
-/*
- * Default website settings
+
+/**
+ * =========================================================
+ * DEFAULT SETTINGS
+ * =========================================================
  */
+
 const DEFAULT_SETTINGS = {
-  brand_name: "Jeghout Visualworks",
+  brand_name:
+    "Jeghout Visualworks",
 
   tagline:
     "Creative Designer, Photographer & Video Editor",
@@ -93,11 +215,18 @@ const DEFAULT_SETTINGS = {
 
   portrait:
     "",
+
+  about_bio:
+    "",
 };
 
-/*
- * Website settings hook
+
+/**
+ * =========================================================
+ * SETTINGS HOOK
+ * =========================================================
  */
+
 export function useSettings() {
   const [settings, setSettings] =
     useState(DEFAULT_SETTINGS);
@@ -108,20 +237,20 @@ export function useSettings() {
     api
       .get("/settings")
       .then((response) => {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         setSettings({
           ...DEFAULT_SETTINGS,
           ...(response.data || {}),
         });
       })
-      .catch(() => {
-        /*
-         * Backend unavailable.
-         *
-         * Keep DEFAULT_SETTINGS so the frontend
-         * can still render normally.
-         */
+      .catch((error) => {
+        console.error(
+          "Failed to load settings:",
+          error
+        );
       });
 
     return () => {
@@ -132,23 +261,64 @@ export function useSettings() {
   return settings;
 }
 
-/*
- * Portfolio categories
+
+/**
+ * =========================================================
+ * CATEGORY LABELS
+ * =========================================================
  */
+
 export const CATEGORY_LABELS = {
-  "graphic-design": "Graphic Design",
-  photography: "Photography",
-  video: "Video",
-  branding: "Branding",
-  "social-media": "Social Media",
+  "graphic-design":
+    "Graphic Design",
 
-  // NEW CATEGORY
-  "live-streaming": "Live Streaming",
+  photography:
+    "Photography",
+
+  video:
+    "Video",
+
+  branding:
+    "Branding",
+
+  "social-media":
+    "Social Media",
+
+  "live-streaming":
+    "Live Streaming",
 };
 
-/*
- * Convert category slug to readable label
+
+/**
+ * =========================================================
+ * CATEGORY HELPER
+ * =========================================================
  */
+
 export const catLabel = (slug) => {
-  return CATEGORY_LABELS[slug] || slug;
+  return (
+    CATEGORY_LABELS[slug] ||
+    slug
+  );
 };
+
+
+/**
+ * =========================================================
+ * DEBUG INFO
+ * =========================================================
+ *
+ * Akan terlihat di browser console.
+ */
+
+if (import.meta.env.DEV) {
+  console.log(
+    "[Jeghout API]",
+    BACKEND_URL
+  );
+
+  console.log(
+    "[Jeghout API Base]",
+    `${BACKEND_URL}/api`
+  );
+}
