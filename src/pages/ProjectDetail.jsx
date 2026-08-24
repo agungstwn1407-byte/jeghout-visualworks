@@ -24,7 +24,7 @@ function embedUrl(url) {
 
   try {
     const parsed = new URL(value);
-    const hostname = parsed.hostname;
+    const hostname = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname;
 
     /* =========================
@@ -32,11 +32,8 @@ function embedUrl(url) {
     ========================= */
 
     if (hostname.includes("youtube.com")) {
-
-      // ---------------------------------
       // YouTube normal:
       // https://www.youtube.com/watch?v=VIDEO_ID
-      // ---------------------------------
 
       if (pathname === "/watch") {
         const videoId = parsed.searchParams.get("v");
@@ -46,10 +43,8 @@ function embedUrl(url) {
         }
       }
 
-      // ---------------------------------
       // YouTube Live:
       // https://www.youtube.com/live/VIDEO_ID
-      // ---------------------------------
 
       if (pathname.startsWith("/live/")) {
         const videoId = pathname
@@ -61,10 +56,8 @@ function embedUrl(url) {
         }
       }
 
-      // ---------------------------------
       // YouTube Shorts:
       // https://www.youtube.com/shorts/VIDEO_ID
-      // ---------------------------------
 
       if (pathname.startsWith("/shorts/")) {
         const videoId = pathname
@@ -76,10 +69,8 @@ function embedUrl(url) {
         }
       }
 
-      // ---------------------------------
       // YouTube embed:
       // https://www.youtube.com/embed/VIDEO_ID
-      // ---------------------------------
 
       if (pathname.startsWith("/embed/")) {
         return value;
@@ -133,7 +124,6 @@ function embedUrl(url) {
         return `https://drive.google.com/file/d/${match[1]}/preview`;
       }
     }
-
   } catch (error) {
     console.error("Invalid video URL:", error);
     return null;
@@ -142,20 +132,18 @@ function embedUrl(url) {
   return null;
 }
 
-
 /* =========================================================
    PROJECT DETAIL
 ========================================================= */
 
 export default function ProjectDetail() {
-
   const { slug } = useParams();
 
   const [p, setP] = useState(undefined);
 
   /*
     undefined = loading
-    null      = project not found
+    null = project not found
   */
 
   /* =========================================================
@@ -163,7 +151,6 @@ export default function ProjectDetail() {
   ========================================================= */
 
   useEffect(() => {
-
     setP(undefined);
 
     api
@@ -174,16 +161,13 @@ export default function ProjectDetail() {
       .catch(() => {
         setP(null);
       });
-
   }, [slug]);
-
 
   /* =========================================================
      PAGE TITLE
   ========================================================= */
 
   useEffect(() => {
-
     if (p) {
       document.title =
         p.seo_title ||
@@ -193,45 +177,37 @@ export default function ProjectDetail() {
     return () => {
       document.title = "Jeghout Visualworks";
     };
-
   }, [p]);
-
 
   /* =========================================================
      LOADING
   ========================================================= */
 
   if (p === undefined) {
-
     return (
       <main
         className="pt-40 pb-24 max-w-[1440px] mx-auto px-6 md:px-12"
         data-testid="project-loading"
       >
-
         <div className="h-4 w-40 bg-[#111116] animate-pulse mb-6" />
 
         <div className="h-14 w-2/3 bg-[#111116] animate-pulse mb-14" />
 
         <div className="w-full h-[60vh] bg-[#111116] animate-pulse" />
-
       </main>
     );
   }
-
 
   /* =========================================================
      PROJECT NOT FOUND
   ========================================================= */
 
   if (p === null) {
-
     return (
       <main
         className="pt-44 pb-32 text-center px-6"
         data-testid="project-not-found"
       >
-
         <p className="font-display text-6xl md:text-8xl font-bold text-stroke">
           404
         </p>
@@ -251,11 +227,9 @@ export default function ProjectDetail() {
           <ArrowLeft size={15} />
           Back to all work
         </Link>
-
       </main>
     );
   }
-
 
   /* =========================================================
      VIDEO URL
@@ -263,24 +237,20 @@ export default function ProjectDetail() {
 
   const video = embedUrl(p.video_url);
 
-
   /* =========================================================
      MAIN
   ========================================================= */
 
   return (
-
     <main
       className="pb-24"
       data-testid="project-detail"
     >
-
       {/* =====================================================
           HEADER
       ===================================================== */}
 
       <div className="max-w-[1440px] mx-auto px-6 md:px-12 pt-36 md:pt-44">
-
         <motion.div
           initial={{
             opacity: 0,
@@ -295,7 +265,6 @@ export default function ProjectDetail() {
             ease: EASE,
           }}
         >
-
           <Link
             to="/work"
             data-testid="back-to-work"
@@ -304,9 +273,7 @@ export default function ProjectDetail() {
             <ArrowLeft size={14} />
             All Work
           </Link>
-
         </motion.div>
-
 
         {/* CATEGORY */}
 
@@ -328,7 +295,6 @@ export default function ProjectDetail() {
         >
           {catLabel(p.category)} — {p.year}
         </motion.p>
-
 
         {/* TITLE */}
 
@@ -352,7 +318,6 @@ export default function ProjectDetail() {
           {p.title}
         </motion.h1>
 
-
         {/* ===================================================
             PROJECT META
         =================================================== */}
@@ -374,11 +339,9 @@ export default function ProjectDetail() {
           className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-12 pb-12 border-b border-white/10"
           data-testid="project-meta"
         >
-
           {/* CLIENT */}
 
           <div>
-
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
               Client
             </p>
@@ -386,14 +349,11 @@ export default function ProjectDetail() {
             <p className="text-sm text-[#F5F5F5]">
               {p.client || "—"}
             </p>
-
           </div>
-
 
           {/* YEAR */}
 
           <div>
-
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
               Year
             </p>
@@ -401,14 +361,11 @@ export default function ProjectDetail() {
             <p className="text-sm text-[#F5F5F5]">
               {p.year || "—"}
             </p>
-
           </div>
-
 
           {/* ROLE */}
 
           <div>
-
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
               My Role
             </p>
@@ -416,51 +373,38 @@ export default function ProjectDetail() {
             <p className="text-sm text-[#F5F5F5]">
               {p.role || "—"}
             </p>
-
           </div>
-
 
           {/* TOOLS */}
 
           <div>
-
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#9A9A9F] mb-2">
               Tools
             </p>
 
             <div className="flex flex-wrap gap-1.5">
-
               {(p.tools || []).map((t) => (
-
                 <span
                   key={t}
                   className="text-[11px] border border-white/10 rounded-full px-2.5 py-1 text-[#C8C8CC]"
                 >
                   {t}
                 </span>
-
               ))}
-
             </div>
-
           </div>
-
         </motion.div>
-
       </div>
-
 
       {/* =====================================================
           HERO IMAGE
       ===================================================== */}
 
       <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-14">
-
         <div
           className="overflow-hidden"
           data-testid="project-hero-image"
         >
-
           <motion.img
             src={imgUrl(p.cover)}
             alt={p.title}
@@ -478,90 +422,67 @@ export default function ProjectDetail() {
               ease: EASE,
             }}
           />
-
         </div>
-
       </div>
-
 
       {/* =====================================================
           PROJECT OVERVIEW
       ===================================================== */}
 
       <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20 grid grid-cols-1 md:grid-cols-12 gap-10">
-
         <Reveal className="md:col-span-4">
-
           <p className="text-xs tracking-[0.25em] uppercase font-semibold text-[#A970FF]">
             Project Overview
           </p>
-
         </Reveal>
-
 
         <Reveal
           delay={0.1}
           className="md:col-span-8"
         >
-
           <p
             className="text-lg md:text-xl text-[#C8C8CC] leading-relaxed max-w-3xl"
             data-testid="project-description"
           >
             {p.description}
           </p>
-
         </Reveal>
-
       </div>
-
 
       {/* =====================================================
           VIDEO
       ===================================================== */}
 
       {video && (
-
         <div className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20">
-
           <Reveal>
-
             <div
-              className="aspect-video w-full bg-[#111116] border border-white/10 overflow-hidden"
+              className="relative w-full aspect-[16/9] bg-[#111116] border border-white/10 overflow-hidden"
               data-testid="project-video"
             >
-
               <iframe
                 src={video}
                 title={`${p.title} video`}
-                className="w-full h-full"
+                className="absolute inset-0 w-full h-full border-0"
                 loading="lazy"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 allowFullScreen
               />
-
             </div>
-
           </Reveal>
-
         </div>
-
       )}
-
 
       {/* =====================================================
           GALLERY
       ===================================================== */}
 
       {p.gallery?.length > 0 && (
-
         <div
           className="max-w-[1440px] mx-auto px-6 md:px-12 mt-20 grid grid-cols-1 md:grid-cols-2 gap-6"
           data-testid="project-gallery"
         >
-
           {p.gallery.map((g, i) => (
-
             <RevealImage
               key={i}
               src={imgUrl(g)}
@@ -572,27 +493,20 @@ export default function ProjectDetail() {
                   : "aspect-[4/3]"
               }
             />
-
           ))}
-
         </div>
-
       )}
-
 
       {/* =====================================================
           MORE PROJECTS
       ===================================================== */}
 
       {p.related?.length > 0 && (
-
         <div
           className="max-w-[1440px] mx-auto px-6 md:px-12 mt-28 md:mt-36"
           data-testid="more-projects"
         >
-
           <div className="flex items-end justify-between mb-12">
-
             <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tighter">
               More Projects
             </h2>
@@ -608,38 +522,26 @@ export default function ProjectDetail() {
                 size={15}
                 className="text-[#A970FF] transition-transform duration-300 group-hover:translate-x-1.5"
               />
-
             </Link>
-
           </div>
 
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
             {p.related
               .slice(0, 3)
               .map((r, i) => (
-
                 <Reveal
                   key={r.id}
                   delay={i * 0.1}
                 >
-
                   <ProjectCard
                     project={r}
                     aspect="aspect-[4/3]"
                   />
-
                 </Reveal>
-
               ))}
-
           </div>
-
         </div>
-
       )}
-
     </main>
   );
 }
