@@ -229,21 +229,150 @@ function Dropzone({
   const [busy, setBusy] = useState(false);
 
 
-  const handle = async (files) => {
+  // =========================================================
+  // IMAGE COMPRESSION
+  // =========================================================
+  //
+  // Images are resized to a maximum of 2000px on the longest side
+  // and converted to WebP before being uploaded.
+  //
+  // This keeps portfolio images sharp while significantly reducing
+  // upload size and storage usage.
+  //
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      if (!file?.type?.startsWith("image/")) {
+        reject(
+          new Error(
+            `"${file?.name || "File"}" is not a valid image.`
+          )
+        );
+        return;
+      }
 
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        try {
+          const MAX_SIZE = 2000;
+          const QUALITY = 0.82;
+
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+
+          if (!width || !height) {
+            URL.revokeObjectURL(objectUrl);
+            reject(
+              new Error(`Unable to read image "${file.name}".`)
+            );
+            return;
+          }
+
+          // Resize only when the image is larger than MAX_SIZE.
+          const scale = Math.min(
+            1,
+            MAX_SIZE / Math.max(width, height)
+          );
+
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+
+          if (!ctx) {
+            URL.revokeObjectURL(objectUrl);
+            reject(
+              new Error(
+                "Your browser does not support image compression."
+              )
+            );
+            return;
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
+          // White background prevents transparent images from
+          // becoming visually different when converted to WebP.
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(objectUrl);
+
+              if (!blob) {
+                reject(
+                  new Error(
+                    `Failed to compress "${file.name}".`
+                  )
+                );
+                return;
+              }
+
+              const baseName = file.name
+                .replace(/\.[^/.]+$/, "")
+                .replace(/[^a-zA-Z0-9-_]+/g, "-")
+                .replace(/-+/g, "-")
+                .replace(/^-|-$/g, "");
+
+              const webpFile = new File(
+                [blob],
+                `${baseName || "image"}.webp`,
+                {
+                  type: "image/webp",
+                  lastModified: Date.now(),
+                }
+              );
+
+              resolve(webpFile);
+            },
+            "image/webp",
+            QUALITY
+          );
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          reject(error);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(
+          new Error(`Failed to read image "${file.name}".`)
+        );
+      };
+
+      img.src = objectUrl;
+    });
+  };
+
+
+  const handle = async (files) => {
     if (!files?.length) return;
 
     setBusy(true);
 
-
-    const fd = new FormData();
-
-    [...files].forEach((file) => {
-      fd.append("files", file);
-    });
-
-
     try {
+      const imageFiles = [...files];
+
+      // Compress all selected images before uploading.
+      const compressedFiles = await Promise.all(
+        imageFiles.map((file) => compressImage(file))
+      );
+
+      const fd = new FormData();
+
+      compressedFiles.forEach((file) => {
+        fd.append("files", file);
+      });
 
       const { data } = await api.post(
         "/admin/upload",
@@ -251,17 +380,12 @@ function Dropzone({
       );
 
       onFiles(data.urls);
-
     } catch (error) {
-
       toast.error(
-        formatApiError(error)
+        error?.message || formatApiError(error)
       );
-
     } finally {
-
       setBusy(false);
-
     }
   };
 
@@ -321,7 +445,7 @@ function Dropzone({
 
 
       <p className="text-xs text-[#9A9A9F] mt-1">
-        Drag & drop or click — auto-optimized to WebP
+        Drag & drop or click — automatically resized & compressed to WebP
       </p>
 
 
